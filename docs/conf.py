@@ -1,6 +1,5 @@
+"""Configuration file for the Sphinx documentation builder."""
 # -*- coding: utf-8 -*-
-#
-# Configuration file for the Sphinx documentation builder.
 #
 # This file does only contain a selection of the most common options. For a
 # full list see the documentation:
@@ -126,13 +125,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (
-        master_doc,
-        "PyKBLib.tex",
-        "PyKBLib Documentation",
-        "CMSteffen",
-        "manual",
-    )
+    (master_doc, "PyKBLib.tex", "PyKBLib Documentation", "CMSteffen", "manual")
 ]
 
 

@@ -1,6 +1,8 @@
 # PyKBLib-Specific
 deploy.sh
+unittest.sh
 keybase-chat-api.txt
+*.old.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

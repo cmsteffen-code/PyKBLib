@@ -12,10 +12,10 @@ Module contents
 Submodules
 ----------
 
-pykblib.const module
---------------------
+pykblib.pykblib module
+----------------------
 
-.. automodule:: pykblib.const
+.. automodule:: pykblib.pykblib
     :members:
     :undoc-members:
     :show-inheritance:
