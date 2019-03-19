@@ -5,6 +5,13 @@ In-Development
 --------------
 - Expand Team functionality.
 
+0.1.0 (2019.03.19)
+------------------
+- Members can now be added and removed from teams.
+- Added various member lists to see what members exist, and what roles they have.
+- Cleaned up the code a bit.
+- Updated the documentation to reflect the new changes.
+
 0.0.3 (2019.03.18)
 ------------------
 - Expanded documentation to include tutorials for all current functionality.
@@ -17,5 +24,4 @@ In-Development
 
 0.0.1 (2019.03.16)
 ------------------
-
 - Created the foundation for distribution of PyKBLib.

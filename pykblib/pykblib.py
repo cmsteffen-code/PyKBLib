@@ -29,7 +29,8 @@ class Keybase:
         self.update_team_list()
         self.username = _get_username()
 
-    def team(self, team_name: str):
+    @staticmethod
+    def team(team_name: str):
         """Return a Team class instance for the specified team.
 
         Parameters
@@ -45,10 +46,6 @@ class Keybase:
         """
         # Create the new Team instance.
         team_instance = Team(team_name)
-        # Set the member_count attribute of the team.
-        team_instance._set_member_count(self._team_data[team_name].member_count)
-        # Set the roles attribute of the team.
-        team_instance._set_roles(self._team_data[team_name].roles)
         # Return the new team instance.
         return team_instance
 
@@ -65,40 +62,191 @@ class Team:
 
     Attributes
     ----------
-    member_count : int
-        The number of members in the team, as of the object creation time.
     name : str
         The name of the team.
-    roles : list
-        A list of the roles assigned to the active user within this team.
+    role : str
+        The role assigned to the active user within this team.
+    member_count : int
+        The number of members in the team, as of the object creation time.
+    members : list
+        A list of the usernames of all members in the team.
+    members_by_role : namedtuple
+        A namedtuple comprising lists of members by specified role. To access
+        the lists, use one of the following:
+
+        * **Team.members_by_role.owner**
+        * **Team.members_by_role.admin**
+        * **Team.members_by_role.writer**
+        * **Team.members_by_role.reader**
+
+    deleted : list
+        A list of the usernames of all members who have deleted their accounts.
 
     """
+
+    # Private Attributes
+    # ------------------
+    # _member_dict : dict
+    #     Contains all of the information provided by the update function,
+    #     including the roles and real name of each user. This info is
+    #     formatted in a namedtuple, so you can access it like so:
+    #
+    #     self._member_dict[username].real_name : str
+    #     self._member_dict[username].role : str
+    #
+    #     If the real_name is set to "Deleted", the user has deleted their
+    #     account.
 
     def __init__(self, name: str):
         """Initialize the Team class."""
         self.name = name
+        # Update the member lists.
+        assert self.update()
 
-    def _set_member_count(self, count: int):
-        """Set the member_count attribute for this team.
-
-        Parameters
-        ----------
-        count : int
-            The number of members in the team.
-
-        """
-        self.member_count = count
-
-    def _set_roles(self, roles: list):
-        """Set the roles attribute for this team.
+    def add_member(self, username: str, role: str = "reader"):
+        """Attempt to add the specified user to this team.
 
         Parameters
         ----------
-        roles : list
-            The list of this team's roles to which the active user is assigned.
+        username : str
+            The username of the user to add to the team.
+        role : str
+            The role to assign to the new member. This must be either reader,
+            writer, admin, or owner. In order to assign the owner role, the
+            current user must be an owner of the team. *(Defaults to reader.)*
+
+        Returns
+        -------
+        bool
+            A boolean value which indicates whether the user was successfully
+            added to the team. It will return True if the user was added, or
+            False if the attempt failed. Note: This can fail if the user is
+            already a member of the team, as well as for other problems.
 
         """
-        self.roles = roles
+        try:
+            # Attempt to add the specified user to the team.
+            result = _run_command(
+                "keybase team add-member {} -u {} -r {} -s".format(
+                    self.name, username, role
+                )
+            )
+            # Check if the result was a success. If so, the word "Success!"
+            # will be in the result string. Otherwise it will be false.
+            return "Success!" in result
+        except subprocess.CalledProcessError:
+            # The attempt was a failure.
+            return False
+
+    def remove_member(self, username: str):
+        """Attempt to remove the specified user from this team.
+
+        Parameters
+        ----------
+        username : str
+            The username of the user to remove from the team.
+
+        Returns
+        -------
+        bool
+            A boolean value which indicates whether the user was successfully
+            removed from the team. It will return True if the user was removed,
+            or False if the attempt failed. Note: This can fail if the user is
+            not a member of the team, as well as for other problems.
+
+        """
+        try:
+            # Attempt to remove the specified user from the team.
+            result = _run_command(
+                "keybase team remove-member {} -u {} -f".format(
+                    self.name, username
+                )
+            )
+            # Check if the result was a success. If so, the word "Success!"
+            # will be in the result string. Otherwise it will be false.
+            return "Success!" in result
+        except subprocess.CalledProcessError:
+            # The attempt was a failure.
+            return False
+
+    def update(self):
+        """Update the team's membership and role information.
+
+        Returns
+        -------
+        bool
+            A boolean value representing the success or failure of the update.
+
+        """
+        try:
+            # Get the name of this user.
+            this_user = _get_username()
+            # Initialize the member dictionary and the member lists.
+            member_dict = dict()
+            members = list()
+            deleted = list()
+            # Initialize the member_role dict, which will contain lists of the
+            # members in each role.
+            members_by_role = dict()
+            members_by_role["owner"] = list()
+            members_by_role["admin"] = list()
+            members_by_role["writer"] = list()
+            members_by_role["reader"] = list()
+            # Retrieve the current list of members.
+            result = _run_command(
+                "keybase team list-memberships {}".format(self.name)
+            )
+            # Extract the important information.
+            for line in result.split("\n"):
+                # Check to ensure this line is valid.
+                if self.name not in line:
+                    continue
+                # Split each line into its constituent parts.
+                # The parts are: [team name, role, username, real name]
+                line_parts = line.split()
+                # Retrieve the user's role.
+                role = line_parts[1]
+                # Retrieve the user's username.
+                username = line_parts[2]
+                # Retrieve the user's real name.
+                real_name = " ".join(line_parts[3:])
+                # Determine whether the user's account was deleted.
+                user_deleted = "(inactive due to account delete)" in real_name
+                # Add the information to the member_dict, converting the real
+                # name, role, and deletion status into a namedtuple.
+                member_dict[username] = dict_to_ntuple(
+                    {
+                        "deleted": user_deleted,
+                        "real_name": real_name,
+                        "role": role,
+                    }
+                )
+                # Add the username to the members list.
+                members.append(username)
+                # If the user was deleted, add them to the deleted list.
+                if user_deleted:
+                    deleted.append(username)
+                # Append the user to the members_by_role dict by role.
+                members_by_role[role].append(username)
+                # If this is the active user, set their role in the team.
+                if username == this_user:
+                    self.role = role
+            # Assign the member lists and member_dict variables to the team.
+            self.members = members
+            # Set the member_count attribute.
+            self.member_count = len(self.members)
+            # Convert members_by_role to a namedtuple and save it to the
+            # members_by_role attribute.
+            self.members_by_role = dict_to_ntuple(members_by_role)
+            self.deleted = deleted
+            self._member_dict = member_dict
+            # If we've reached this point, we've succeeded in updating the
+            # member information. Return True.
+            return True
+        except subprocess.CalledProcessError:
+            # There was an error with the request. Do not update any of the
+            # team's variables and return False to indicate failure.
+            return False
 
 
 def _get_memberships():
