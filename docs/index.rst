@@ -6,6 +6,7 @@ The PyKBLib library allows you to interface with the Keybase application program
    :maxdepth: 2
    :caption: Contents:
 
+   tuts/tutorials
    source/modules
    changelog
 

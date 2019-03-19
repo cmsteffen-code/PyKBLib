@@ -1,5 +1,5 @@
-pykblib
-=======
+Reference
+=========
 
 .. toctree::
    :maxdepth: 4
