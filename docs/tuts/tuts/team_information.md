@@ -1,26 +1,6 @@
 Interacting with Teams
 ======================
 
-Retrieving a Team List
-----------------------
-To retrieve a list of the teams to which the active user belongs, simply use the `Keybase.teams` attribute. You can use this, for example, to print out the list:
-
-```
-print("Team Memberships:")
-for team_name in KB.teams:
-    print(f" - {team_name}")
-```
-
-Updating the Team List
-----------------------
-The `Keybase.teams` list is populated when the `Keybase` class is instantiated. However, it does not actively track changes in the active user's memberships. The `update_team_list` function is used to update this list. To update the list of team memberships, simply do the following:
-
-```
-KB.update_team_list()
-```
-
-Note that calling this function will incur a slight delay, as the library must request the data from the Keybase application, which can take some time.
-
 Creating a Team Instance
 ------------------------
 To interact with a team directly, you'll want to create an instance of the `Team` class. This can be done by using the `Keybase.team` function:
@@ -117,3 +97,24 @@ The role assigned must be one of the following:
 * `owner` - Can do anything admins can do, but also has the ability to delete the team.
 
 For more information, see [the official Keybase team documentation](https://keybase.io/docs/teams/design). *Note: While each of these roles may have the specified abilities, many of these abilities have not yet been implemented in PyKBLib.*
+
+Changing Member Roles
+---------------------
+To change a member's role, the active user must have either the `admin` or `owner` role in the team. Changing a member's role can be accomplished with the `Team.change_member_role` function:
+
+```
+# Change the 'pykblib' user's role from writer to reader.
+TEAM.change_member_role("pykblib", "reader")
+```
+
+The function will return `True` if the role is successfully changed, or `False` if the role change is a failure. *Note: Only team owners can add new team owners.*
+
+Purging Deleted Members
+-----------------------
+If a team member deletes their account without leaving a team, their username will be added to the `Team.deleted` list. The `Team.purge_deleted` function was created in order to purge these users quickly. Usage is simple:
+
+```
+TEAM.purge_deleted()
+```
+
+*Note: The `Team.purge_deleted` function removes all of the users in the current `Team.deleted` list, but it does not automatically update this list.*

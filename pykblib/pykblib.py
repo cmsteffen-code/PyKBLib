@@ -138,6 +138,44 @@ class Team:
             # The attempt was a failure.
             return False
 
+    def change_member_role(self, username: str, role: str):
+        """Change the specified user's role within this team.
+
+        Parameters
+        ----------
+        username : str
+            The username of the member whose role will be changed.
+        role : str
+            The role to assign to the member. This must be either reader,
+            writer, admin, or owner. In order to assign the owner role, the
+            current user must be an owner of the team.
+
+        Returns
+        -------
+        bool
+            A boolean value which indicates whether the user's role was
+            successfully changed. It will return True if the role was changed,
+            or False if the role was not changed.
+
+        """
+        try:
+            # Attempt to change the member's role.
+            result = _run_command(
+                "keybase team edit-member {} -u {} -r {}".format(
+                    self.name, username, role
+                )
+            )
+            # Check if the result was a success.
+            return "Success!" in result
+        except subprocess.CalledProcessError:
+            # The attempt was a failure.
+            return False
+
+    def purge_deleted(self):
+        """Purge deleted members from this team."""
+        for username in self.deleted:
+            self.remove_member(username)
+
     def remove_member(self, username: str):
         """Attempt to remove the specified user from this team.
 
