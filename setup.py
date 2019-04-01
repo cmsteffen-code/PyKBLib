@@ -41,6 +41,6 @@ setup(
     ],
     packages=[PACKAGE_NAME],
     include_package_data=True,
-    install_requires=['steffentools >=0.1.0, <0.2'],
+    install_requires=['steffentools >=0.1.0'],
     entry_points={},
 )

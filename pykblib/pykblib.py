@@ -187,11 +187,12 @@ class Team:
             deleted = list()
             # Initialize the member_role dict, which will contain lists of the
             # members in each role.
-            members_by_role = dict()
-            members_by_role["owner"] = list()
-            members_by_role["admin"] = list()
-            members_by_role["writer"] = list()
-            members_by_role["reader"] = list()
+            members_by_role = {
+                "owner": list(),
+                "admin": list(),
+                "writer": list(),
+                "reader": list(),
+            }
             # Retrieve the current list of members.
             result = _run_command(
                 "keybase team list-memberships {}".format(self.name)
