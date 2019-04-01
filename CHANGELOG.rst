@@ -3,7 +3,12 @@ Release History
 
 In-Development
 --------------
-- Expand Team functionality.
+- Refactor Team class to use the Keybase Team API.
+
+0.2.0 (2019.04.01)
+------------------
+- Added the Team.change_member_role and Team.purge_deleted functions.
+- Updated the documentation to account for the new functions, as well as to rearrange tutorials in a more rational layout.
 
 0.1.0 (2019.03.19)
 ------------------
