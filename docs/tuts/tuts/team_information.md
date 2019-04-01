@@ -28,7 +28,7 @@ Most information about a team is accessible through the `Team` class' attributes
 * `Team.name` (*str*) The name of the team.
 * `Team.role` (*str*) The team role assigned to the current user.
 * `Team.member_count` (*int*) The number of members in the team.
-* `Team.members` (*list*) A list of the team's members.
+* `Team.members` (*list*) A list of the team's active members. (Deleted users will not be in this list.)
 * `Team.members_by_role` (*namedtuple*) A namedtuple containing lists of members sorted into their respective roles:
     * `Team.members_by_role.owner` (*list*) A list of all the owners of the team.
     * `Team.members_by_role.admin` (*list*) A list of all the admins of the team.
@@ -73,7 +73,7 @@ Note that this function incurs a slight delay, due to the fact that it must retr
 
 Adding and Removing Members
 ---------------------------
-To add or remove members from a team, you must be an admin or owner of that team. Adding and removing team members can be done with the `Team.add_member` and `Team.remove_member` functions, respectively. For example:
+To add or remove members from a team, you must be an admin or owner of that team. Adding and removing individual team members can be done with the `Team.add_member` and `Team.remove_member` functions, respectively. For example:
 
 ```
 # Add the 'pykblib' user to the TEAM.
@@ -82,11 +82,20 @@ TEAM.add_member("pykblib")
 TEAM.remove_member("pykblib")
 ```
 
-The `Team.add_member` function assigns the `reader` role to the new member by default. In order to assign a different role, simply specify it as an additional parameter to the `Team.add_member` function:
+To add multiple members at once, you can use the `Team.add_members` function. It works just like the `Team.add_member` function, except it takes a list of usernames as the first parameter:
+
+```
+# Add the 'pykblib' and 'user2' users to the TEAM.
+TEAM.add_members(["pykblib", "user2"])
+```
+
+The `Team.add_member` and `Team.add_members` functions assign the `reader` role to new members by default. In order to assign a different role, simply specify it as an additional parameter to the `Team.add_member` or `Team.add_members` functions:
 
 ```
 # Add the 'pykblib' user to the TEAM as a writer.
 TEAM.add_member("pykblib", "writer")
+# Add the 'user2' and 'user3' users to the TEAM as writers.
+TEAM.add_members(["user2", "user3"], "writer")
 ```
 
 The role assigned must be one of the following:
@@ -96,7 +105,24 @@ The role assigned must be one of the following:
 * `admin` - Can add or remove admins, readers, and writers to the team, and can establish new sub-teams. They can also deactivate sub-teams.
 * `owner` - Can do anything admins can do, but also has the ability to delete the team.
 
-For more information, see [the official Keybase team documentation](https://keybase.io/docs/teams/design). *Note: While each of these roles may have the specified abilities, many of these abilities have not yet been implemented in PyKBLib.*
+(For more information regarding roles, see [the official Keybase team documentation](https://keybase.io/docs/teams/design). *Note: While each of these roles may have the specified abilities, many of these abilities have not yet been implemented in PyKBLib.*)
+
+If the `Team.add_member` or `Team.add_members` functions succeed, they will return `True`. Otherwise, they will return `False`. However, there is a caveat: When using `Team.add_members`, the Keybase API will attempt to add each member in the list in the order they are presented, and will return an error if any of the users are already in the team (resulting in the function returning `False`). However, due to the fact that it adds each member in order, it is possible that some of the members may be successfully added prior to the member that caused the failure. For example:
+
+```
+>>> # Current members: None
+>>> TEAM.add_member("user1")  #1
+True
+>>> # Current members: user1
+>>> TEAM.add_members(["user1", "user2"])  #2
+False
+>>> # Current members: user1 (user2 wasn't added)
+>>> TEAM.add_members(["user2", "user1", "user3"])  #3
+False
+>>> # Current members: user1, user2 (user3 wasn't added)
+```
+
+In the first example (#1), user1 was added to the team successfully. In the second example (#2), user2 could not be added because the API threw an error when trying to add user1, who was already a member of the team. In the third example (#3) user2 was added successfully, but user3 was not added, because the API threw an error when trying to add user1 to the team.
 
 Changing Member Roles
 ---------------------

@@ -18,7 +18,6 @@ from unittest import TestCase
 
 from pykblib import Keybase, Team
 
-
 DEV_TEAM_NAME = "pykblib_dev"
 TEST_USER_NAME = "pykblib"
 
@@ -96,6 +95,8 @@ class KeybaseClassTest(TestCase):
         dev_team.remove_member(TEST_USER_NAME)
         # Attempt to add the test user to the team as a reader.
         self.assertEqual(dev_team.add_member(TEST_USER_NAME), True)
+        # Attempt to add the user again.
+        self.assertEqual(dev_team.add_member(TEST_USER_NAME), False)
         # Attempt to remove the test user from the team.
         self.assertEqual(dev_team.remove_member(TEST_USER_NAME), True)
         # Attempt to add the test user to the team as a writer.

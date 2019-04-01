@@ -1,6 +1,6 @@
 """Contains the core functionality of the pykblib library."""
 
-
+import json
 import subprocess
 
 from steffentools import dict_to_ntuple
@@ -26,11 +26,10 @@ class Keybase:
 
     def __init__(self):
         """Initialize the Keybase class."""
-        self.update_team_list()
         self.username = _get_username()
+        self.update_team_list()
 
-    @staticmethod
-    def team(team_name: str):
+    def team(self, team_name: str):
         """Return a Team class instance for the specified team.
 
         Parameters
@@ -45,14 +44,14 @@ class Keybase:
 
         """
         # Create the new Team instance.
-        team_instance = Team(team_name)
+        team_instance = Team(team_name, self)
         # Return the new team instance.
         return team_instance
 
     def update_team_list(self):
         """Update the Keybase.teams attribute."""
         # Retrieve information about the team memberships.
-        self._team_data = _get_memberships()
+        self._team_data = _get_memberships(self.username)
         # Extract the list of team names and store it in the teams attribute.
         self.teams = list(self._team_data.keys())
 
@@ -64,12 +63,15 @@ class Team:
     ----------
     name : str
         The name of the team.
+    user : Keybase
+        The active user. This is the instance of the Keybase class that created
+        this Team instance.
     role : str
         The role assigned to the active user within this team.
     member_count : int
         The number of members in the team, as of the object creation time.
     members : list
-        A list of the usernames of all members in the team.
+        A list of the usernames of all active members in the team.
     members_by_role : namedtuple
         A namedtuple comprising lists of members by specified role. To access
         the lists, use one of the following:
@@ -84,22 +86,10 @@ class Team:
 
     """
 
-    # Private Attributes
-    # ------------------
-    # _member_dict : dict
-    #     Contains all of the information provided by the update function,
-    #     including the roles and real name of each user. This info is
-    #     formatted in a namedtuple, so you can access it like so:
-    #
-    #     self._member_dict[username].real_name : str
-    #     self._member_dict[username].role : str
-    #
-    #     If the real_name is set to "Deleted", the user has deleted their
-    #     account.
-
-    def __init__(self, name: str):
+    def __init__(self, name: str, user: Keybase):
         """Initialize the Team class."""
         self.name = name
+        self.user = user
         # Update the member lists.
         assert self.update()
 
@@ -124,19 +114,42 @@ class Team:
             already a member of the team, as well as for other problems.
 
         """
-        try:
-            # Attempt to add the specified user to the team.
-            result = _run_command(
-                "keybase team add-member {} -u {} -r {} -s".format(
-                    self.name, username, role
-                )
-            )
-            # Check if the result was a success. If so, the word "Success!"
-            # will be in the result string. Otherwise it will be false.
-            return "Success!" in result
-        except subprocess.CalledProcessError:
-            # The attempt was a failure.
+        return self.add_members([username], role)
+
+    def add_members(self, usernames: list, role: str = "reader"):
+        """Attempt to add the specified users to this team.
+
+        Parameters
+        ----------
+        usernames : str
+            The usernames of the users to add to the team.
+        role : str
+            The role to assign to the new members. This must be either reader,
+            writer, admin, or owner. In order to assign the owner role, the
+            current user must be an owner of the team. *(Defaults to reader.)*
+
+        Returns
+        -------
+        bool
+            A boolean value which indicates whether the users were successfully
+            added to the team. It will return True if the users were added, or
+            False if the attempt failed. Note: This can fail if the users are
+            already a member of the team, as well as for other problems.
+
+        """
+        username_list = [
+            {"username": username, "role": role} for username in usernames
+        ]
+        query = {
+            "method": "add-members",
+            "params": {
+                "options": {"team": self.name, "usernames": username_list}
+            },
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
             return False
+        return True
 
     def change_member_role(self, username: str, role: str):
         """Change the specified user's role within this team.
@@ -158,18 +171,20 @@ class Team:
             or False if the role was not changed.
 
         """
-        try:
-            # Attempt to change the member's role.
-            result = _run_command(
-                "keybase team edit-member {} -u {} -r {}".format(
-                    self.name, username, role
-                )
-            )
-            # Check if the result was a success.
-            return "Success!" in result
-        except subprocess.CalledProcessError:
-            # The attempt was a failure.
+        query = {
+            "method": "edit-member",
+            "params": {
+                "options": {
+                    "team": self.name,
+                    "username": username,
+                    "role": role,
+                }
+            },
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
             return False
+        return True
 
     def purge_deleted(self):
         """Purge deleted members from this team."""
@@ -193,19 +208,14 @@ class Team:
             not a member of the team, as well as for other problems.
 
         """
-        try:
-            # Attempt to remove the specified user from the team.
-            result = _run_command(
-                "keybase team remove-member {} -u {} -f".format(
-                    self.name, username
-                )
-            )
-            # Check if the result was a success. If so, the word "Success!"
-            # will be in the result string. Otherwise it will be false.
-            return "Success!" in result
-        except subprocess.CalledProcessError:
-            # The attempt was a failure.
+        query = {
+            "method": "remove-member",
+            "params": {"options": {"team": self.name, "username": username}},
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
             return False
+        return True
 
     def update(self):
         """Update the team's membership and role information.
@@ -216,80 +226,138 @@ class Team:
             A boolean value representing the success or failure of the update.
 
         """
-        try:
-            # Get the name of this user.
-            this_user = _get_username()
-            # Initialize the member dictionary and the member lists.
-            member_dict = dict()
-            members = list()
-            deleted = list()
-            # Initialize the member_role dict, which will contain lists of the
-            # members in each role.
-            members_by_role = {
-                "owner": list(),
-                "admin": list(),
-                "writer": list(),
-                "reader": list(),
-            }
-            # Retrieve the current list of members.
-            result = _run_command(
-                "keybase team list-memberships {}".format(self.name)
-            )
-            # Extract the important information.
-            for line in result.split("\n"):
-                # Check to ensure this line is valid.
-                if self.name not in line:
-                    continue
-                # Split each line into its constituent parts.
-                # The parts are: [team name, role, username, real name]
-                line_parts = line.split()
-                # Retrieve the user's role.
-                role = line_parts[1]
-                # Retrieve the user's username.
-                username = line_parts[2]
-                # Retrieve the user's real name.
-                real_name = " ".join(line_parts[3:])
-                # Determine whether the user's account was deleted.
-                user_deleted = "(inactive due to account delete)" in real_name
-                # Add the information to the member_dict, converting the real
-                # name, role, and deletion status into a namedtuple.
-                member_dict[username] = dict_to_ntuple(
-                    {
-                        "deleted": user_deleted,
-                        "real_name": real_name,
-                        "role": role,
-                    }
-                )
-                # Add the username to the members list.
-                members.append(username)
-                # If the user was deleted, add them to the deleted list.
-                if user_deleted:
-                    deleted.append(username)
-                # Append the user to the members_by_role dict by role.
-                members_by_role[role].append(username)
-                # If this is the active user, set their role in the team.
-                if username == this_user:
-                    self.role = role
-            # Assign the member lists and member_dict variables to the team.
-            self.members = members
-            # Set the member_count attribute.
-            self.member_count = len(self.members)
-            # Convert members_by_role to a namedtuple and save it to the
-            # members_by_role attribute.
-            self.members_by_role = dict_to_ntuple(members_by_role)
-            self.deleted = deleted
-            self._member_dict = member_dict
-            # If we've reached this point, we've succeeded in updating the
-            # member information. Return True.
-            return True
-        except subprocess.CalledProcessError:
-            # There was an error with the request. Do not update any of the
-            # team's variables and return False to indicate failure.
+        query = {
+            "method": "list-team-memberships",
+            "params": {"options": {"team": self.name}},
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
             return False
+        # Retrieve the names of all members in each role.
+        members_by_role = dict()
+        self.deleted = list()
+        self.members = list()
+        roles = {
+            "owner": response.result.members.owners,
+            "admin": response.result.members.admins,
+            "writer": response.result.members.writers,
+            "reader": response.result.members.readers,
+        }
+        for role, member_list in roles.items():
+            try:
+                members_by_role[role] = list()
+                for member in member_list:
+                    if member.username == self.user.username:
+                        # This is our entry, save our role.
+                        self.role = role
+                    if member.status == 2:
+                        # This member has deleted their account.
+                        self.deleted.append(member.username)
+                    elif member.status == 0:
+                        # This member is active.
+                        self.members.append(member.username)
+                        members_by_role[role].append(member.username)
+                    else:
+                        # This member is of an unknown status.
+                        # TODO: Figure out the other possible statuses and add
+                        # them to the script in order to finish this section.
+                        print(
+                            "Unknown member status for {}: {}".format(
+                                member.username, member.status
+                            )
+                        )
+                        self.members.append(member.username)
+                        members_by_role[role].append(member.username)
+            except TypeError:
+                # We've already initialized the list for this role, so we don't
+                # need to worry about handling this exception.
+                pass
+        self.member_count = len(self.members)
+        self.members_by_role = dict_to_ntuple(members_by_role)
+        return True
 
 
-def _get_memberships():
-    """Get a dictionary of the teams to which the user belongs.
+def _api_base(service: str, query: dict):
+    """Send a query to the specified service API.
+
+    Parameters
+    ----------
+    query : dict
+        The API query in dict format.
+    service : str
+        The API service to which the query will be sent, such as 'chat', 'team'
+        or 'wallet'.
+
+    Returns
+    -------
+    result : namedtuple
+        The API result in namedtuple format.
+
+    """
+    query = json.dumps(query)
+    response = _run_command("keybase {} api -m '{}'".format(service, query))
+    response = json.loads(response)
+    return dict_to_ntuple(response)
+
+
+def _api_chat(query: dict):
+    """Send a query to the Chat API.
+
+    Parameters
+    ----------
+    query : dict
+        The API query in dict format.
+
+    Returns
+    -------
+    result : namedtuple
+        The API result in namedtuple format.
+
+    """
+    return _api_base("chat", query)
+
+
+def _api_team(query: dict):
+    """Send a query to the Team API.
+
+    Parameters
+    ----------
+    query : dict
+        The API query in dict format.
+
+    Returns
+    -------
+    result : namedtuple
+        The API result in namedtuple format.
+
+    """
+    return _api_base("team", query)
+
+
+def _api_wallet(query: dict):
+    """Send a query to the Wallet API.
+
+    Parameters
+    ----------
+    query : dict
+        The API query in dict format.
+
+    Returns
+    -------
+    result : namedtuple
+        The API result in namedtuple format.
+
+    """
+    return _api_base("wallet", query)
+
+
+def _get_memberships(username: str):
+    """Get a dictionary of the teams to which the specified user belongs.
+
+    Parameters
+    ----------
+    username : str
+        The target user.
 
     Returns
     -------
@@ -298,31 +366,34 @@ def _get_memberships():
         belongs, corresponding with their roles and the number of users in each
         team. The elements are accessed as follows:
 
-        **team_dict[team_name].roles** : list
-            The list of roles assigned to the user for this team.
+        **team_dict[team_name].role** : list
+            The role assigned to the user for this team.
         **team_dict[team_name].member_count** : int
             The number of members in this team.
+        **team_dict[team_name].data** : namedtuple
+            The team info returned from the Keybase Team API.
 
     """
-    # Run the command and retrieve the result.
-    result = _run_command("keybase team list-memberships")
-    # Parse the result into a list. We skip the first line because it simply
-    # states the column names.
-    team_list = [item for item in result.split("\n")[1:-1]]
-    # Create the team_dict dictionary.
+    # Get the list of team memberships.
+    response = _api_team(
+        {
+            "method": "list-user-memberships",
+            "params": {"options": {"username": username}},
+        }
+    )
+    # Extract the important data from the result.
     team_dict = dict()
-    # Parse the team list into the memberships dictionary.
-    for team in team_list:
-        [name, roles, member_count] = [
-            item.strip() for item in team.split("    ") if item != ""
-        ]
-        # Extract the list of roles.
-        roles = roles.split(", ")
-        # Create a team_data dictionary with the roles and member count.
-        team_data = {"roles": roles, "member_count": int(member_count)}
-        # Convert the team_data to a namedtuple and assign it to the team_dict.
-        team_dict[name] = dict_to_ntuple(team_data)
-    # Return the team dictionary.
+    if response.result.teams is not None:
+        for team in response.result.teams:
+            user_role = ["iadmin", "reader", "writer", "admin", "owner"][
+                team.role
+            ]
+            team_data = {
+                "role": user_role,
+                "member_count": team.member_count,
+                "data": team,
+            }
+            team_dict[team.fq_name] = dict_to_ntuple(team_data)
     return team_dict
 
 
@@ -349,12 +420,18 @@ def _run_command(command_string: str):
     This function is only intended to be used with Keybase console commands. It
     will make three attempts to run the specified command. Each time it fails,
     it will attempt to restart the keybase daemon before making another
-    attempt.
+    attempt. After the third failed attempt, it will raise the TimeoutExpired
+    error. Any other error encountered will be raised regardless.
 
     Parameters
     ----------
     command_string : str
         The command to be executed.
+
+    Returns
+    -------
+    str
+        The command-line output.
 
     """
     attempts = 0

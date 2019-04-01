@@ -1,14 +1,15 @@
 import pathlib
 import re
-from setuptools import setup
 import sys
+
+from setuptools import setup
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
 PACKAGE_NAME = "pykblib"
 
 CONST_TEXT = (HERE / f"{PACKAGE_NAME}/const.py").read_text()
-VERSION = re.search("__version__ = \"([^']+)\"", CONST_TEXT).group(1)
+VERSION = re.search('__version__ = "([^\']+)"', CONST_TEXT).group(1)
 
 setup(
     name="PyKBLib",
@@ -41,6 +42,6 @@ setup(
     ],
     packages=[PACKAGE_NAME],
     include_package_data=True,
-    install_requires=['steffentools >=0.1.0'],
+    install_requires=["steffentools >=0.1.0"],
     entry_points={},
 )
