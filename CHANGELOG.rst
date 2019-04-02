@@ -4,6 +4,18 @@ Release History
 In-Development
 --------------
 - Expand Team functionality.
+- Implement Chat functionality.
+- Implement Wallet functionality.
+
+1.0.0 (2019.04.02)
+------------------
+- Updated the Team.purge_deleted function and added the Team.purge_reset function.
+- Removed Team.member_count variable.
+- Refactored code to extract global functions into functions.py and rename pykblib.py to classes.py.
+- Renamed the public Team.user variable to the private Team._keybase variable.
+- Moved the Team.deleted and Team.reset lists into the Team.members_by_role namedtuple.
+- Turned Team.members from a variable into a function.
+- Updated documentation to match refactored code.
 
 0.2.2 (2019.04.01)
 ------------------

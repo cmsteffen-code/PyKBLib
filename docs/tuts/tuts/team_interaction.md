@@ -13,7 +13,7 @@ The above code will create a `Team` instance connected to the team called "team_
 
 ```
 team_name = "team_name"
-member_count = KB.team(team_name).member_count
+member_count = len(KB.team(team_name).members())
 print(f"The '{team_name}' team has {member_count} members.")
 ```
 
@@ -27,23 +27,23 @@ Most information about a team is accessible through the `Team` class' attributes
 
 * `Team.name` (*str*) The name of the team.
 * `Team.role` (*str*) The team role assigned to the current user.
-* `Team.member_count` (*int*) The number of members in the team.
-* `Team.members` (*list*) A list of the team's active members. (Deleted users will not be in this list.)
 * `Team.members_by_role` (*namedtuple*) A namedtuple containing lists of members sorted into their respective roles:
     * `Team.members_by_role.owner` (*list*) A list of all the owners of the team.
     * `Team.members_by_role.admin` (*list*) A list of all the admins of the team.
     * `Team.members_by_role.writer` (*list*) A list of all the writers in the team.
     * `Team.members_by_role.reader` (*list*) A list of all the readers in the team.
-* `Team.deleted` (*list*) A list of members who have deleted their accounts.
+    * `Team.members_by_role.deleted` (*list*) A list of members who have deleted their accounts.
+    * `Team.members_by_role.reset` (*list*) A list of members who have reset their accounts.
+
+You can also get a complete list of active members using the `Team.members` function.
 
 If you wanted to print out a summary of this information, you could do the following:
 
 ```
 print(f"Information for team {TEAM.name}:")
 print(f"- role: {TEAM.role}")
-print(f"- member_count: {TEAM.member_count}")
 print("- team members:")
-for member in TEAM.members:
+for member in TEAM.members():
     print(f"  - {member}")
 print("- owners:")
 for member in TEAM.members_by_role.owner:
@@ -58,11 +58,14 @@ print("- readers:")
 for member in TEAM.members_by_role.reader:
     print(f"  - {member}")
 print("- deleted accounts:")
-for member in TEAM.deleted:
+for member in TEAM.members_by_role.deleted:
+    print(f"  - {member}")
+print("- reset accounts:")
+for member in TEAM.members_by_role.reset:
     print(f"  - {member}")
 ```
 
-The membership and role information is populated at the creation of the `Team` instance. In order to update the team membership information, simply use the `Team.update` function:
+The membership and role information is populated at the creation of the `Team` instance. Any time the library is used to update team member information, those changes are saved as well. However, any changes made outside the script will not be automatically recorded. In order to update the team membership information, simply use the `Team.update` function:
 
 ```
 # Update the team's membership and role information.
@@ -135,14 +138,17 @@ TEAM.change_member_role("pykblib", "reader")
 
 The function will return `True` if the role is successfully changed, or `False` if the role change is a failure. *Note: Only team owners can add new team owners.*
 
-Purging Deleted Members
------------------------
-If a team member deletes their account without leaving a team, their username will be added to the `Team.deleted` list. The `Team.purge_deleted` function was created in order to purge these users quickly. Usage is simple:
+Purging Deleted and Reset Members
+---------------------------------
+If a team member deletes or resets their account without leaving a team, their username will be added to the `Team.deleted` or `Team.reset` lists, respectively. The `Team.purge_deleted` and `Team.purge_reset` functions were created in order to purge these users quickly. Usage is simple:
 
 ```
+# Purge all deleted users from a team.
 TEAM.purge_deleted()
+# Purge all reset users from a team.
+TEAM.purge_reset()
 ```
 
-The function will return a list of usernames that were unable to be purged, if any. If all deleted users were successfully purged, the function will return an empty list.
+The functions will return a list of usernames that were unable to be purged, if any. If all deleted/reset users were successfully purged, the functions will return an empty list. Either way, the team's `purged` and `deleted` lists will be updated appropriately.
 
 *Note: The `Team.purge_deleted` function removes all of the users in the current `Team.deleted` list, but it does not automatically update this list.*

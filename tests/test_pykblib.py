@@ -61,10 +61,8 @@ class KeybaseClassTest(TestCase):
         self.assertEqual(dev_team.name, DEV_TEAM_NAME)
         # Ensure that the team roles attribute is a list.
         self.assertIsInstance(dev_team.role, str)
-        # Ensure that the team member_count attribute is an int.
-        self.assertIsInstance(dev_team.member_count, int)
-        # Ensure that the members list is a list.
-        self.assertIsInstance(dev_team.members, list)
+        # Ensure that the members function returns a list.
+        self.assertIsInstance(dev_team.members(), list)
         # Ensure that the owners list is a list.
         self.assertIsInstance(dev_team.members_by_role.owner, list)
         # Ensure that the admins list is a list.
@@ -74,12 +72,11 @@ class KeybaseClassTest(TestCase):
         # Ensure that the readers list is a list.
         self.assertIsInstance(dev_team.members_by_role.reader, list)
         # Ensure that the deleted list is a list.
-        self.assertIsInstance(dev_team.deleted, list)
-        # Ensure that the members list contains the number of members specified
-        # in the member_count.
-        self.assertEqual(len(dev_team.members), dev_team.member_count)
+        self.assertIsInstance(dev_team.members_by_role.deleted, list)
+        # Ensure that the reset list is a list.
+        self.assertIsInstance(dev_team.members_by_role.reset, list)
         # Ensure that the active user is in the members list.
-        self.assertIn(self.keybase.username, dev_team.members)
+        self.assertIn(self.keybase.username, dev_team.members())
         # Ensure that the active user is an owner or admin of the team.
         self.assertTrue(
             self.keybase.username
@@ -95,18 +92,24 @@ class KeybaseClassTest(TestCase):
         dev_team.remove_member(TEST_USER_NAME)
         # Attempt to add the test user to the team as a reader.
         self.assertEqual(dev_team.add_member(TEST_USER_NAME), True)
+        self.assertIn(TEST_USER_NAME, dev_team.members_by_role.reader)
         # Attempt to add the user again.
         self.assertEqual(dev_team.add_member(TEST_USER_NAME), False)
         # Attempt to remove the test user from the team.
         self.assertEqual(dev_team.remove_member(TEST_USER_NAME), True)
+        self.assertNotIn(TEST_USER_NAME, dev_team.members_by_role.reader)
         # Attempt to add the test user to the team as a writer.
         self.assertEqual(dev_team.add_member(TEST_USER_NAME, "writer"), True)
+        self.assertIn(TEST_USER_NAME, dev_team.members_by_role.writer)
         # Attempt to change the test user's role to "reader".
         self.assertEqual(
             dev_team.change_member_role(TEST_USER_NAME, "reader"), True
         )
+        self.assertIn(TEST_USER_NAME, dev_team.members_by_role.reader)
+        self.assertNotIn(TEST_USER_NAME, dev_team.members_by_role.writer)
         # Attempt to remove the test user from the team.
         self.assertEqual(dev_team.remove_member(TEST_USER_NAME), True)
+        self.assertNotIn(TEST_USER_NAME, dev_team.members_by_role.reader)
         # Generate a random 16-character username. (Keybase usernames cannot
         # exceed 16 characters.) We'll assume that they don't exist.
         fake_user = "demo_" + "".join(
@@ -114,6 +117,7 @@ class KeybaseClassTest(TestCase):
         )
         # Attempt to add the fake user to the team.
         self.assertEqual(dev_team.add_member(fake_user), False)
+        self.assertNotIn(fake_user, dev_team.members_by_role.reader)
         # Attempt to remove the fake user from the team.
         self.assertEqual(dev_team.remove_member(fake_user), False)
 

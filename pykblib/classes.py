@@ -1,9 +1,14 @@
-"""Contains the core functionality of the pykblib library."""
-
-import json
-import subprocess
+"""Contains the core class definitions for the pykblib library."""
 
 from steffentools import dict_to_ntuple
+
+from pykblib.functions import (
+    _api_chat,
+    _api_team,
+    _api_wallet,
+    _get_memberships,
+    _get_username,
+)
 
 
 class Keybase:
@@ -117,13 +122,8 @@ class Team:
     ----------
     name : str
         The name of the team.
-    user : Keybase
-        The active user. This is the instance of the Keybase class that created
-        this Team instance.
     role : str
         The role assigned to the active user within this team.
-    member_count : int
-        The number of members in the team, as of the object creation time.
     members : list
         A list of the usernames of all active members in the team.
     members_by_role : namedtuple
@@ -134,16 +134,24 @@ class Team:
         * **Team.members_by_role.admin**
         * **Team.members_by_role.writer**
         * **Team.members_by_role.reader**
-
-    deleted : list
-        A list of the usernames of all members who have deleted their accounts.
+        * **Team.members_by_role.deleted**
+        * **Team.members_by_role.reset**
 
     """
 
-    def __init__(self, name: str, user: Keybase):
-        """Initialize the Team class."""
+    def __init__(self, name: str, parent: Keybase):
+        """Initialize the Team class.
+
+        Parameters
+        ----------
+        name : str
+            The team's name.
+        parent : Keybase
+            The Keybase object that spawned this Team.
+
+        """
         self.name = name
-        self.user = user
+        self._keybase = parent
         # Update the member lists.
         assert self.update()
 
@@ -203,6 +211,13 @@ class Team:
         response = _api_team(query)
         if hasattr(response, "error"):
             return False
+        roles = {
+            "owner": self.members_by_role.owner,
+            "admin": self.members_by_role.admin,
+            "writer": self.members_by_role.writer,
+            "reader": self.members_by_role.reader,
+        }
+        roles[role] += usernames
         return True
 
     def change_member_role(self, username: str, role: str):
@@ -238,6 +253,19 @@ class Team:
         response = _api_team(query)
         if hasattr(response, "error"):
             return False
+        roles = {
+            "owner": self.members_by_role.owner,
+            "admin": self.members_by_role.admin,
+            "writer": self.members_by_role.writer,
+            "reader": self.members_by_role.reader,
+        }
+        for member_role, member_list in roles.items():
+            # Remove the user from their previous role and add them to their
+            # new role.
+            if role != member_role and username in member_list:
+                member_list.pop(member_list.index(username))
+            elif role == member_role and username not in member_list:
+                member_list.append(username)
         return True
 
     def create_sub_team(self, team_name: str):
@@ -261,7 +289,28 @@ class Team:
 
         """
         full_name = self.name + "." + team_name
-        return self.user.create_team(full_name)
+        return self._keybase.create_team(full_name)
+
+    def members(self):
+        """Return a list of all active members in the team.
+
+        Returns
+        -------
+        members : list
+            A list of all active members in the team.
+
+        """
+        active_member_lists = [
+            self.members_by_role.owner,
+            self.members_by_role.admin,
+            self.members_by_role.writer,
+            self.members_by_role.reader,
+        ]
+        members = list()
+        for member_list in active_member_lists:
+            members += member_list
+        members = sorted(list(set(members)))
+        return members
 
     def purge_deleted(self):
         """Purge deleted members from this team.
@@ -274,9 +323,27 @@ class Team:
 
         """
         failures = list()
-        for username in self.deleted:
+        for username in self.members_by_role.deleted:
             if not self.remove_member(username):
                 failures.append(username)
+        self.members_by_role.deleted = list(failures)
+        return failures
+
+    def purge_reset(self):
+        """Purge members whose accounts were reset.
+
+        Returns
+        -------
+        failures : list
+            A list of members that were unable to be purged. If all members
+            were purged successfully, this list will be empty.
+
+        """
+        failures = list()
+        for username in self.members_by_role.reset:
+            if not self.remove_member(username):
+                failures.append(username)
+        self.members_by_role.reset = list(failures)
         return failures
 
     def remove_member(self, username: str):
@@ -303,6 +370,16 @@ class Team:
         response = _api_team(query)
         if hasattr(response, "error"):
             return False
+        roles = {
+            "owner": self.members_by_role.owner,
+            "admin": self.members_by_role.admin,
+            "writer": self.members_by_role.writer,
+            "reader": self.members_by_role.reader,
+        }
+        for member_role, member_list in roles.items():
+            # Remove the user from their previous role.
+            if username in member_list:
+                member_list.pop(member_list.index(username))
         return True
 
     def rename(self, new_name: str):
@@ -335,7 +412,7 @@ class Team:
         response = _api_team(query)
         if hasattr(response, "error"):
             return False
-        self.user.update_team_name(self.name, new_name)
+        self._keybase.update_team_name(self.name, new_name)
         self.name = new_name
         return True
 
@@ -357,221 +434,42 @@ class Team:
             return False
         # Retrieve the names of all members in each role.
         members_by_role = dict()
-        self.deleted = list()
-        self.members = list()
+        self.reset = list()
         roles = {
             "owner": response.result.members.owners,
             "admin": response.result.members.admins,
             "writer": response.result.members.writers,
             "reader": response.result.members.readers,
         }
+        members_by_role["deleted"] = list()
+        members_by_role["reset"] = list()
         for role, member_list in roles.items():
             try:
                 members_by_role[role] = list()
                 for member in member_list:
-                    if member.username == self.user.username:
+                    if member.username == self._keybase.username:
                         # This is our entry, save our role.
                         self.role = role
                     if member.status == 2:
                         # This member has deleted their account.
-                        self.deleted.append(member.username)
+                        members_by_role["deleted"].append(member.username)
+                    elif member.status == 1:
+                        # This member's account was reset.
+                        members_by_role["reset"].append(member.username)
                     elif member.status == 0:
                         # This member is active.
-                        self.members.append(member.username)
                         members_by_role[role].append(member.username)
                     else:
                         # This member is of an unknown status.
-                        # TODO: Figure out the other possible statuses and add
-                        # them to the script in order to finish this section.
                         print(
                             "Unknown member status for {}: {}".format(
                                 member.username, member.status
                             )
                         )
-                        self.members.append(member.username)
                         members_by_role[role].append(member.username)
             except TypeError:
                 # We've already initialized the list for this role, so we don't
                 # need to worry about handling this exception.
                 pass
-        self.member_count = len(self.members)
         self.members_by_role = dict_to_ntuple(members_by_role)
         return True
-
-
-def _api_base(service: str, query: dict):
-    """Send a query to the specified service API.
-
-    Parameters
-    ----------
-    query : dict
-        The API query in dict format.
-    service : str
-        The API service to which the query will be sent, such as 'chat', 'team'
-        or 'wallet'.
-
-    Returns
-    -------
-    result : namedtuple
-        The API result in namedtuple format.
-
-    """
-    query = json.dumps(query)
-    response = _run_command("keybase {} api -m '{}'".format(service, query))
-    response = json.loads(response)
-    return dict_to_ntuple(response)
-
-
-def _api_chat(query: dict):
-    """Send a query to the Chat API.
-
-    Parameters
-    ----------
-    query : dict
-        The API query in dict format.
-
-    Returns
-    -------
-    result : namedtuple
-        The API result in namedtuple format.
-
-    """
-    return _api_base("chat", query)
-
-
-def _api_team(query: dict):
-    """Send a query to the Team API.
-
-    Parameters
-    ----------
-    query : dict
-        The API query in dict format.
-
-    Returns
-    -------
-    result : namedtuple
-        The API result in namedtuple format.
-
-    """
-    return _api_base("team", query)
-
-
-def _api_wallet(query: dict):
-    """Send a query to the Wallet API.
-
-    Parameters
-    ----------
-    query : dict
-        The API query in dict format.
-
-    Returns
-    -------
-    result : namedtuple
-        The API result in namedtuple format.
-
-    """
-    return _api_base("wallet", query)
-
-
-def _get_memberships(username: str):
-    """Get a dictionary of the teams to which the specified user belongs.
-
-    Parameters
-    ----------
-    username : str
-        The target user.
-
-    Returns
-    -------
-    team_dict : dict
-        A dict comprising named tuples for each of the teams to which the user
-        belongs, corresponding with their roles and the number of users in each
-        team. The elements are accessed as follows:
-
-        **team_dict[team_name].role** : list
-            The role assigned to the user for this team.
-        **team_dict[team_name].member_count** : int
-            The number of members in this team.
-        **team_dict[team_name].data** : namedtuple
-            The team info returned from the Keybase Team API.
-
-    """
-    # Get the list of team memberships.
-    response = _api_team(
-        {
-            "method": "list-user-memberships",
-            "params": {"options": {"username": username}},
-        }
-    )
-    # Extract the important data from the result.
-    team_dict = dict()
-    if response.result.teams is not None:
-        for team in response.result.teams:
-            user_role = ["iadmin", "reader", "writer", "admin", "owner"][
-                team.role
-            ]
-            team_data = {
-                "role": user_role,
-                "member_count": team.member_count,
-                "data": team,
-            }
-            team_dict[team.fq_name] = dict_to_ntuple(team_data)
-    return team_dict
-
-
-def _get_username():
-    """Get the name of the user currently logged in.
-
-    Returns
-    -------
-    username : str
-        The username of the currently active Keybase user.
-
-    """
-    # Run the command and retrieve the result.
-    result = _run_command("keybase status")
-    # Extract the username from the result.
-    username = result.split("\n")[0].split(":")[-1].strip()
-    # Return the username.
-    return username
-
-
-def _run_command(command_string: str):
-    """Execute a console command and retrieve the result.
-
-    This function is only intended to be used with Keybase console commands. It
-    will make three attempts to run the specified command. Each time it fails,
-    it will attempt to restart the keybase daemon before making another
-    attempt. After the third failed attempt, it will raise the TimeoutExpired
-    error. Any other error encountered will be raised regardless.
-
-    Parameters
-    ----------
-    command_string : str
-        The command to be executed.
-
-    Returns
-    -------
-    str
-        The command-line output.
-
-    """
-    attempts = 0
-    while True:
-        try:
-            # Attempt to execute the specified command and retrieve the result.
-            return subprocess.check_output(
-                command_string,
-                stderr=subprocess.STDOUT,
-                shell=True,
-                timeout=10,  # Raise an exception if this takes > 10 seconds.
-            ).decode()
-        except subprocess.TimeoutExpired:
-            # When the call times out, check how many times it has failed.
-            if attempts > 3:
-                # If it's failed more than three times, raise the exception.
-                raise
-            # If it hasn't failed three times yet, restart they keybase daemon.
-            subprocess.check_output("keybase ctl restart", shell=True)
-            # Increment the number of attempts.
-            attempts += 1
