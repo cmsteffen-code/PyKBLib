@@ -116,3 +116,36 @@ class KeybaseClassTest(TestCase):
         self.assertEqual(dev_team.add_member(fake_user), False)
         # Attempt to remove the fake user from the team.
         self.assertEqual(dev_team.remove_member(fake_user), False)
+
+    def test_keybase_team_management(self):
+        """Check whether the team management is working properly."""
+        # Generate a random 16-character team name. (Keybase team names cannot
+        # exceed 16 characters.) We'll assume the team doesn't already exist.
+        random_team_name = "team_" + "".join(
+            [
+                random.choice(string.ascii_lowercase + string.digits + "_-")
+                for _ in range(11)
+            ]
+        )
+        # Attempt to create the new team.
+        test_team = self.keybase.create_team(random_team_name)
+        self.assertIsInstance(test_team, Team)
+        # Ensure that creating the team a second time fails.
+        self.assertFalse(self.keybase.create_team(random_team_name))
+        # Attempt to create a sub-team.
+        sub_team = test_team.create_sub_team("subteam")
+        self.assertIsInstance(sub_team, Team)
+        # Attempt to rename the main team.
+        self.assertFalse(test_team.rename("this_should_fail"))
+        self.assertEqual(test_team.name, random_team_name)
+        # Attempt to rename the sub team.
+        self.assertTrue(sub_team.rename("subteam2"))
+        self.assertEqual(sub_team.name, random_team_name + "." + "subteam2")
+        # Attempt to delete the new teams.
+        # TODO: Figure out how to script the Keybase team deletion command.
+        print("\nPlease remember to delete test teams:")
+        print("* {}".format(test_team.name))
+        print("* {}".format(sub_team.name))
+        # Ensure that the new teams are in the self.keybase.teams list.
+        self.assertIn(test_team.name, self.keybase.teams)
+        self.assertIn(sub_team.name, self.keybase.teams)

@@ -5,6 +5,12 @@ In-Development
 --------------
 - Expand Team functionality.
 
+0.2.2 (2019.04.01)
+------------------
+- Updated Team.purge_deleted to return a list of members were not removed.
+- Added Keybase.create_team function. As of now, teams cannot be easily deleted via scripts.
+- Added ability to create sub-teams and change sub-team names.
+
 0.2.1 (2019.04.01)
 ------------------
 - Implemented functions for communicating with the various APIs.

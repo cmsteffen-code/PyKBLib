@@ -29,6 +29,36 @@ class Keybase:
         self.username = _get_username()
         self.update_team_list()
 
+    def create_team(self, team_name: str):
+        """Attempt to create a new Keybase Team.
+
+        If the team is successfully created, the team's name will be added to
+        the `Keybase.teams` list and an instance of `Team` will be returned.
+        Otherwise, the function will return `False`.
+
+        Parameters
+        ----------
+        team_name : str
+            The name of the team to be created.
+
+        Returns
+        -------
+        Team or False
+            If the team is successfully created, this function will return a
+            Team object for the new team. Otherwise, it will return False.
+
+        """
+        query = {
+            "method": "create-team",
+            "params": {"options": {"team": team_name}},
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
+            return False
+        self.teams.append(team_name)
+        self.teams.sort()
+        return self.team(team_name)
+
     def team(self, team_name: str):
         """Return a Team class instance for the specified team.
 
@@ -54,6 +84,30 @@ class Keybase:
         self._team_data = _get_memberships(self.username)
         # Extract the list of team names and store it in the teams attribute.
         self.teams = list(self._team_data.keys())
+
+    def update_team_name(self, old_name: str, new_name: str):
+        """Attempt to update the name of a team in the teams list.
+
+        Parameters
+        ----------
+        old_name : str
+            The original name of the team.
+        new_name : str
+            The new name of the team.
+
+        Returns
+        -------
+        bool
+            Returns `True` or `False`, dependent on whether the update was
+            successful.
+
+        """
+        try:
+            self.teams[self.teams.index(old_name)] = new_name
+            return new_name in self.teams
+        except ValueError:
+            # The team name wasn't in the list.
+            return False
 
 
 class Team:
@@ -186,10 +240,44 @@ class Team:
             return False
         return True
 
+    def create_sub_team(self, team_name: str):
+        """Attempt to create a sub-team within this team.
+
+        This function simply calls `Keybase.create_team` with the appropriate
+        full team name, a concatenation of the parent team and sub-team names,
+        separated by a period.
+
+        Parameters
+        ----------
+        team_name : str
+            The name of the sub-team to be created. The final team name will be
+            `parent_team.team_name` where `parent_team` is this team's name.
+
+        Returns
+        -------
+        Team or False
+            This will either return a new Team object if the sub-team is
+            successfully created, or `False` if creation fails.
+
+        """
+        full_name = self.name + "." + team_name
+        return self.user.create_team(full_name)
+
     def purge_deleted(self):
-        """Purge deleted members from this team."""
+        """Purge deleted members from this team.
+
+        Returns
+        -------
+        failures : list
+            A list of members that were unable to be deleted. If all members
+            were deleted successfully, this list will be empty.
+
+        """
+        failures = list()
         for username in self.deleted:
-            self.remove_member(username)
+            if not self.remove_member(username):
+                failures.append(username)
+        return failures
 
     def remove_member(self, username: str):
         """Attempt to remove the specified user from this team.
@@ -215,6 +303,40 @@ class Team:
         response = _api_team(query)
         if hasattr(response, "error"):
             return False
+        return True
+
+    def rename(self, new_name: str):
+        """Attempt to rename this team.
+
+        This will only work if this team is a sub-team.
+
+        Parameters
+        ----------
+        new_name : str
+            The sub-team's new name.
+
+        Returns
+        -------
+        bool
+            The function will return either `True` or `False`, dependent upon
+            the success of the name-change attempt.
+
+        """
+        if "." not in self.name:
+            # We cannot change the name of top-level teams.
+            return False
+        new_name = ".".join(self.name.split(".")[:-1]) + "." + new_name
+        query = {
+            "method": "rename-subteam",
+            "params": {
+                "options": {"team": self.name, "new-team-name": new_name}
+            },
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
+            return False
+        self.user.update_team_name(self.name, new_name)
+        self.name = new_name
         return True
 
     def update(self):

@@ -143,4 +143,6 @@ If a team member deletes their account without leaving a team, their username wi
 TEAM.purge_deleted()
 ```
 
+The function will return a list of usernames that were unable to be purged, if any. If all deleted users were successfully purged, the function will return an empty list.
+
 *Note: The `Team.purge_deleted` function removes all of the users in the current `Team.deleted` list, but it does not automatically update this list.*
