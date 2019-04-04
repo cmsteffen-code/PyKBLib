@@ -28,13 +28,13 @@ class KeybaseClassTest(TestCase):
         cls.keybase = KB
         assert isinstance(
             cls.keybase, Keybase
-        ), "Could not create keybase instance. Please try again."
+        ), "Could not create keybase instance."
         # Generate a random 16-character team name. (Keybase team names cannot
         # exceed 16 characters.) We'll assume the team doesn't already exist.
-        random_team_name = "team_" + "".join(
+        random_team_name = "".join(
             [
-                random.choice(string.ascii_lowercase + string.digits + "_-")
-                for _ in range(11)
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in range(16)
             ]
         )
         cls.random_team_name = random_team_name
@@ -43,7 +43,14 @@ class KeybaseClassTest(TestCase):
         cls.test_team = TEAM
         assert isinstance(
             cls.test_team, Team
-        ), "Could not create team instance. Please try again."
+        ), "Could not create team instance."
+
+    @classmethod
+    def tearDownClass(cls):
+        """Remove the last team that was created."""
+        assert cls.keybase.delete_team(
+            cls.random_team_name
+        ), "Could not delete team '{}'".format(cls.random_team_name)
 
     def test_keybase_class(self):
         """Perform basic tests on the Keybase class."""
@@ -177,33 +184,56 @@ class KeybaseClassTest(TestCase):
             )
         )
         # Attempt to create a sub-team.
-        sub_team = KeybaseClassTest.test_team.create_sub_team("subteam")
+        sub_team = KeybaseClassTest.test_team.create_sub_team("sub1")
         self.assertIsInstance(sub_team, Team)
         # Attempt to create a sub-sub-team.
-        sub_sub_team = sub_team.create_sub_team("subteam")
+        sub_sub_team = sub_team.create_sub_team("subsub1")
         self.assertIsInstance(sub_sub_team, Team)
+        # Attempt to create a second sub-sub-team.
+        sub_sub_team2 = sub_team.create_sub_team("subsub2")
+        self.assertIsInstance(sub_sub_team2, Team)
         # Attempt to rename the main team.
         self.assertFalse(KeybaseClassTest.test_team.rename("this_should_fail"))
         self.assertEqual(
             KeybaseClassTest.test_team.name, KeybaseClassTest.random_team_name
         )
         # Attempt to rename the sub team.
-        self.assertTrue(sub_team.rename("subteam2"))
+        self.assertTrue(sub_team.rename("sub2"))
         # Ensure that the name was changed, both for the sub_team and for the
         # sub_sub_team.
         self.assertEqual(
-            sub_team.name, KeybaseClassTest.random_team_name + "." + "subteam2"
+            sub_team.name, KeybaseClassTest.random_team_name + "." + "sub2"
         )
         self.assertIn(sub_team.name, sub_sub_team.name)
-        # Ensure that the new teams are in the KeybaseClassTest.keybase.teams list.
+        # Ensure that the new teams are in KeybaseClassTest.keybase.teams.
         self.assertIn(
             KeybaseClassTest.test_team.name, KeybaseClassTest.keybase.teams
         )
         self.assertIn(sub_team.name, KeybaseClassTest.keybase.teams)
         self.assertIn(sub_sub_team.name, KeybaseClassTest.keybase.teams)
-        # For now we don't have a reliable way to delete teams, so we have to
-        # do it manually.
-        print("\nPlease remember to delete test teams:")
-        print("* {}".format(KeybaseClassTest.test_team.name))
-        print("* {}".format(sub_team.name))
-        print("* {}".format(sub_sub_team.name))
+        # Attempt to delete a bad team name.
+        self.assertFalse(
+            KeybaseClassTest.keybase.delete_team("; ls -la"),
+            "Shouldn't be able to exploit delete_team.",
+        )
+        self.assertFalse(
+            KeybaseClassTest.keybase.delete_team("not_a_real_team"),
+            "Shouldn't be able to delete a team that doesn't exist.",
+        )
+        # Attempt to delete the second sub-sub-team.
+        sub_sub2_name = sub_sub_team2.name
+        self.assertTrue(
+            KeybaseClassTest.keybase.delete_team(sub_sub2_name),
+            "Couldn't delete second sub sub team.",
+        )
+        self.assertNotIn(sub_sub2_name, KeybaseClassTest.keybase.teams)
+        # Ensure that deleting a team deletes all of its sub-teams.
+        sub_name = sub_team.name
+        sub_sub_name = sub_sub_team.name
+        # This time we test with the Team.delete function.
+        self.assertTrue(sub_team.delete(), "Couldn't delete sub team.")
+        self.assertNotIn(sub_name, KeybaseClassTest.keybase.teams)
+        self.assertNotIn(sub_sub_name, KeybaseClassTest.keybase.teams)
+        # Ensure we can't create a new instance of the Keybase test team.
+        with self.assertRaises(AssertionError):
+            KeybaseClassTest.keybase.team(sub_name)

@@ -35,8 +35,19 @@ team_name.new_name
 
 While parent teams cannot be renamed, sub-teams can be renamed as often as you'd like.
 
-Sub-teams can have their own sub-teams, which can be created and renamed in the manner outlined here. *However, as of this release, renaming a sub-team doesn't automatically update its sub-sub-teams' names.* If you have a sub-team with sub-teams, and you change the parent sub-team's name, you'll need to manually update that sub-team's sub-teams' names. (Don't worry, we're working on it.)
-
 Deleting Teams
 --------------
-As of this release, Keybase does not yet support automated team deletion. To delete a team, you will need to be the owner of the team, and you will need to delete it manually, using the `keybase team delete <team_name>` command.
+In order to delete a team, you must first be that team's owner.
+
+There are two ways to delete a team in PyKBLib. You can either use the `Keybase.delete_team` function to delete a team by name, or you can delete a team from its instance by using the `Team.delete` function. For example:
+
+```
+# Delete team_one by name.
+KB.delete_team("team_one")
+
+# Create an instance of team_two and delete it.
+TEAM = KB.team("team_two")
+TEAM.delete()
+```
+
+If you attempt to delete a team that has sub-teams, the sub-teams will be deleted first.

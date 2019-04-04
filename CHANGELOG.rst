@@ -7,6 +7,11 @@ In-Development
 - Implement Chat functionality.
 - Implement Wallet functionality.
 
+1.1.0 (2019.04.04)
+------------------
+- Added the ability to delete teams.
+- Switched from the subprocess library to the pexpect library for process management.
+
 1.0.2 (2019.04.03)
 ------------------
 - Fixed a bug where renaming a team didn't update the names of its subteams in the program's memory.

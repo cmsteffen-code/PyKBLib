@@ -1,11 +1,10 @@
-"""The Team class."""
+"""Contains the Team class definition."""
 
 from steffentools import dict_to_ntuple
 
 from pykblib.functions import _api_team
 
 
-# TODO: add Team.update_parent_team_name
 class Team:
     """An instance of a Keybase team.
 
@@ -40,11 +39,17 @@ class Team:
         parent : Keybase
             The Keybase object that spawned this Team.
 
+        Raises
+        ------
+        AssertionError
+            If the team cannot be initialized, this raises an AssertionError.
+
         """
         self.name = name
         self._keybase = parent
         # Update the member lists.
-        assert self.update()
+        if not self.update():
+            raise AssertionError("Cannot initialize team {}.".format(name))
 
     def add_member(self, username, role="reader"):
         """Attempt to add the specified user to this team.
@@ -61,10 +66,7 @@ class Team:
         Returns
         -------
         bool
-            A boolean value which indicates whether the user was successfully
-            added to the team. It will return True if the user was added, or
-            False if the attempt failed. Note: This can fail if the user is
-            already a member of the team, as well as for other problems.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         return self.add_members([username], role)
@@ -84,10 +86,7 @@ class Team:
         Returns
         -------
         bool
-            A boolean value which indicates whether the users were successfully
-            added to the team. It will return True if the users were added, or
-            False if the attempt failed. Note: This can fail if the users are
-            already a member of the team, as well as for other problems.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         username_list = [
@@ -126,9 +125,7 @@ class Team:
         Returns
         -------
         bool
-            A boolean value which indicates whether the user's role was
-            successfully changed. It will return True if the role was changed,
-            or False if the role was not changed.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         query = {
@@ -181,6 +178,17 @@ class Team:
         """
         full_name = self.name + "." + team_name
         return self._keybase.create_team(full_name)
+
+    def delete(self):
+        """Attempt to delete this team and all of its sub-teams.
+
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
+        """
+        return self._keybase.delete_team(self.name)
 
     def members(self):
         """Return a list of all active members in the team.
@@ -248,10 +256,7 @@ class Team:
         Returns
         -------
         bool
-            A boolean value which indicates whether the user was successfully
-            removed from the team. It will return True if the user was removed,
-            or False if the attempt failed. Note: This can fail if the user is
-            not a member of the team, as well as for other problems.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         query = {
@@ -286,8 +291,7 @@ class Team:
         Returns
         -------
         bool
-            The function will return either `True` or `False`, dependent upon
-            the success of the name-change attempt.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         if "." not in self.name:
@@ -313,7 +317,7 @@ class Team:
         Returns
         -------
         bool
-            A boolean value representing the success or failure of the update.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         query = {

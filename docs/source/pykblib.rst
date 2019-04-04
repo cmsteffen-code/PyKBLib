@@ -12,10 +12,18 @@ Module contents
 Submodules
 ----------
 
-pykblib.classes module
+pykblib.keybase module
 ----------------------
 
-.. automodule:: pykblib.classes
+.. automodule:: pykblib.keybase
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pykblib.team module
+----------------------
+
+.. automodule:: pykblib.team
     :members:
     :undoc-members:
     :show-inheritance:
