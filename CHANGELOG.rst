@@ -7,6 +7,10 @@ In-Development
 - Implement Chat functionality.
 - Implement Wallet functionality.
 
+1.0.1 (2019.04.03)
+------------------
+- Refactored code to split the classes up into their own files.
+
 1.0.0 (2019.04.02)
 ------------------
 - Updated the Team.purge_deleted function and added the Team.purge_reset function.

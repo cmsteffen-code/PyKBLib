@@ -90,17 +90,11 @@ class KeybaseClassTest(TestCase):
         # Attempt to remove the 'pykblib' user from the team, in preparation
         # for the next section. This requires admin privileges in the team.
         dev_team.remove_member(TEST_USER_NAME)
-        # Attempt to add the test user to the team as a reader.
-        self.assertEqual(dev_team.add_member(TEST_USER_NAME), True)
-        self.assertIn(TEST_USER_NAME, dev_team.members_by_role.reader)
-        # Attempt to add the user again.
-        self.assertEqual(dev_team.add_member(TEST_USER_NAME), False)
-        # Attempt to remove the test user from the team.
-        self.assertEqual(dev_team.remove_member(TEST_USER_NAME), True)
-        self.assertNotIn(TEST_USER_NAME, dev_team.members_by_role.reader)
         # Attempt to add the test user to the team as a writer.
         self.assertEqual(dev_team.add_member(TEST_USER_NAME, "writer"), True)
         self.assertIn(TEST_USER_NAME, dev_team.members_by_role.writer)
+        # Attempt to add the user again.
+        self.assertEqual(dev_team.add_member(TEST_USER_NAME), False)
         # Attempt to change the test user's role to "reader".
         self.assertEqual(
             dev_team.change_member_role(TEST_USER_NAME, "reader"), True
@@ -145,11 +139,11 @@ class KeybaseClassTest(TestCase):
         # Attempt to rename the sub team.
         self.assertTrue(sub_team.rename("subteam2"))
         self.assertEqual(sub_team.name, random_team_name + "." + "subteam2")
-        # Attempt to delete the new teams.
-        # TODO: Figure out how to script the Keybase team deletion command.
-        print("\nPlease remember to delete test teams:")
-        print("* {}".format(test_team.name))
-        print("* {}".format(sub_team.name))
         # Ensure that the new teams are in the self.keybase.teams list.
         self.assertIn(test_team.name, self.keybase.teams)
         self.assertIn(sub_team.name, self.keybase.teams)
+        # For now we don't have a reliable way to delete teams, so we have to
+        # do it manually.
+        print("\nPlease remember to delete test teams:")
+        print("* {}".format(test_team.name))
+        print("* {}".format(sub_team.name))

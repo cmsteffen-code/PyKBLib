@@ -1,118 +1,8 @@
-"""Contains the core class definitions for the pykblib library."""
+"""The Team class."""
 
 from steffentools import dict_to_ntuple
 
-from pykblib.functions import (
-    _api_chat,
-    _api_team,
-    _api_wallet,
-    _get_memberships,
-    _get_username,
-)
-
-
-class Keybase:
-    """The primary point of interaction with PyKBLib.
-
-    Attributes
-    ----------
-    teams : list
-        A list of the names of teams to which the active user is subscribed.
-    username : str
-        The name of the user logged into Keybase.
-
-    """
-
-    # Private Attributes
-    # ------------------
-    # _team_data : dict
-    #     A dictionary of the teams to which the user belongs, corresponding
-    #     with their roles and the number of users in each team.
-
-    def __init__(self):
-        """Initialize the Keybase class."""
-        self.username = _get_username()
-        self.update_team_list()
-
-    def create_team(self, team_name: str):
-        """Attempt to create a new Keybase Team.
-
-        If the team is successfully created, the team's name will be added to
-        the `Keybase.teams` list and an instance of `Team` will be returned.
-        Otherwise, the function will return `False`.
-
-        Parameters
-        ----------
-        team_name : str
-            The name of the team to be created.
-
-        Returns
-        -------
-        Team or False
-            If the team is successfully created, this function will return a
-            Team object for the new team. Otherwise, it will return False.
-
-        """
-        query = {
-            "method": "create-team",
-            "params": {"options": {"team": team_name}},
-        }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            return False
-        self.teams.append(team_name)
-        self.teams.sort()
-        return self.team(team_name)
-
-    def team(self, team_name: str):
-        """Return a Team class instance for the specified team.
-
-        Parameters
-        ----------
-        team_name : str
-            The name of the team to which the Team class should refer.
-
-        Returns
-        -------
-        team_instance : Team
-            The Team class instance created by the function.
-
-        """
-        # Create the new Team instance.
-        team_instance = Team(team_name, self)
-        # Return the new team instance.
-        return team_instance
-
-    def update_team_list(self):
-        """Update the Keybase.teams attribute."""
-        # Retrieve information about the team memberships.
-        self._team_data = _get_memberships(self.username)
-        # Extract the list of team names and store it in the teams attribute.
-        self.teams = list(self._team_data.keys())
-
-    def update_team_name(self, old_name: str, new_name: str):
-        """Attempt to update the name of a team in the teams list.
-
-        Parameters
-        ----------
-        old_name : str
-            The original name of the team.
-        new_name : str
-            The new name of the team.
-
-        Returns
-        -------
-        bool
-            Returns `True` or `False`, dependent on whether the update was
-            successful.
-
-        """
-        try:
-            self.teams[self.teams.index(old_name)] = new_name
-            return new_name in self.teams
-        except ValueError:
-            # The team name wasn't in the list.
-            return False
+from pykblib.functions import _api_team
 
 
 class Team:
@@ -139,7 +29,7 @@ class Team:
 
     """
 
-    def __init__(self, name: str, parent: Keybase):
+    def __init__(self, name, parent):
         """Initialize the Team class.
 
         Parameters
@@ -155,7 +45,7 @@ class Team:
         # Update the member lists.
         assert self.update()
 
-    def add_member(self, username: str, role: str = "reader"):
+    def add_member(self, username, role="reader"):
         """Attempt to add the specified user to this team.
 
         Parameters
@@ -178,7 +68,7 @@ class Team:
         """
         return self.add_members([username], role)
 
-    def add_members(self, usernames: list, role: str = "reader"):
+    def add_members(self, usernames, role="reader"):
         """Attempt to add the specified users to this team.
 
         Parameters
@@ -220,7 +110,7 @@ class Team:
         roles[role] += usernames
         return True
 
-    def change_member_role(self, username: str, role: str):
+    def change_member_role(self, username, role):
         """Change the specified user's role within this team.
 
         Parameters
@@ -268,7 +158,7 @@ class Team:
                 member_list.append(username)
         return True
 
-    def create_sub_team(self, team_name: str):
+    def create_sub_team(self, team_name):
         """Attempt to create a sub-team within this team.
 
         This function simply calls `Keybase.create_team` with the appropriate
@@ -346,7 +236,7 @@ class Team:
         self.members_by_role.reset = list(failures)
         return failures
 
-    def remove_member(self, username: str):
+    def remove_member(self, username):
         """Attempt to remove the specified user from this team.
 
         Parameters
@@ -376,13 +266,13 @@ class Team:
             "writer": self.members_by_role.writer,
             "reader": self.members_by_role.reader,
         }
-        for member_role, member_list in roles.items():
+        for _, member_list in roles.items():
             # Remove the user from their previous role.
             if username in member_list:
                 member_list.pop(member_list.index(username))
         return True
 
-    def rename(self, new_name: str):
+    def rename(self, new_name):
         """Attempt to rename this team.
 
         This will only work if this team is a sub-team.
