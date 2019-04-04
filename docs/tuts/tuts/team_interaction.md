@@ -45,24 +45,18 @@ print(f"- role: {TEAM.role}")
 print("- team members:")
 for member in TEAM.members():
     print(f"  - {member}")
-print("- owners:")
-for member in TEAM.members_by_role.owner:
-    print(f"  - {member}")
-print("- admins:")
-for member in TEAM.members_by_role.admin:
-    print(f"  - {member}")
-print("- writers:")
-for member in TEAM.members_by_role.writer:
-    print(f"  - {member}")
-print("- readers:")
-for member in TEAM.members_by_role.reader:
-    print(f"  - {member}")
-print("- deleted accounts:")
-for member in TEAM.members_by_role.deleted:
-    print(f"  - {member}")
-print("- reset accounts:")
-for member in TEAM.members_by_role.reset:
-    print(f"  - {member}")
+roles = {
+    "owners": TEAM.members_by_role.owner,
+    "admins": TEAM.members_by_role.admin,
+    "writers": TEAM.members_by_role.writer,
+    "readers": TEAM.members_by_role.reader,
+    "deleted accounts": TEAM.members_by_role.deleted,
+    "reset accounts": TEAM.members_by_role.reset,
+}
+for role, member_list in roles.items():
+    print(f"- {role}")
+    for member in member_list:
+        print(f"  - {member}")
 ```
 
 The membership and role information is populated at the creation of the `Team` instance. Any time the library is used to update team member information, those changes are saved as well. However, any changes made outside the script will not be automatically recorded. In order to update the team membership information, simply use the `Team.update` function:
