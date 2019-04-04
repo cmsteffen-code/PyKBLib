@@ -5,6 +5,7 @@ from steffentools import dict_to_ntuple
 from pykblib.functions import _api_team
 
 
+# TODO: add Team.update_parent_team_name
 class Team:
     """An instance of a Keybase team.
 
@@ -363,3 +364,19 @@ class Team:
                 pass
         self.members_by_role = dict_to_ntuple(members_by_role)
         return True
+
+    def update_parent_team_name(self, old_name, new_name):
+        """Update this team's name after a parent team has changed its name.
+
+        Note: This is automatically called when the parent team's name is
+        changed. This should not be called directly.
+
+        Parameters
+        ----------
+        old_name : str
+            The original name of the parent team.
+        new_name : str
+            The new name of the parent team.
+
+        """
+        self.name = self.name.replace(old_name, new_name)

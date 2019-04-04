@@ -7,6 +7,10 @@ In-Development
 - Implement Chat functionality.
 - Implement Wallet functionality.
 
+1.0.2 (2019.04.03)
+------------------
+- Fixed a bug where renaming a team didn't update the names of its subteams in the program's memory.
+
 1.0.1 (2019.04.03)
 ------------------
 - Refactored code to split the classes up into their own files.

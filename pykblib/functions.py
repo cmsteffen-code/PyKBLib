@@ -6,7 +6,7 @@ import subprocess
 from steffentools import dict_to_ntuple
 
 
-def _api_base(service: str, query: dict):
+def _api_base(service, query):
     """Send a query to the specified service API.
 
     Parameters
@@ -29,7 +29,7 @@ def _api_base(service: str, query: dict):
     return dict_to_ntuple(response)
 
 
-def _api_chat(query: dict):
+def _api_chat(query):
     """Send a query to the Chat API.
 
     Parameters
@@ -46,7 +46,7 @@ def _api_chat(query: dict):
     return _api_base("chat", query)
 
 
-def _api_team(query: dict):
+def _api_team(query):
     """Send a query to the Team API.
 
     Parameters
@@ -63,7 +63,7 @@ def _api_team(query: dict):
     return _api_base("team", query)
 
 
-def _api_wallet(query: dict):
+def _api_wallet(query):
     """Send a query to the Wallet API.
 
     Parameters
@@ -80,8 +80,8 @@ def _api_wallet(query: dict):
     return _api_base("wallet", query)
 
 
-def _get_memberships(username: str):
-    """Get a dictionary of the teams to which the specified user belongs.
+def _get_memberships(username):
+    """Get a list of the teams to which the specified user belongs.
 
     Parameters
     ----------
@@ -90,17 +90,8 @@ def _get_memberships(username: str):
 
     Returns
     -------
-    team_dict : dict
-        A dict comprising named tuples for each of the teams to which the user
-        belongs, corresponding with their roles and the number of users in each
-        team. The elements are accessed as follows:
-
-        **team_dict[team_name].role** : list
-            The role assigned to the user for this team.
-        **team_dict[team_name].member_count** : int
-            The number of members in this team.
-        **team_dict[team_name].data** : namedtuple
-            The team info returned from the Keybase Team API.
+    team_list : list
+        A list of all the teams of which the active user is a member.
 
     """
     # Get the list of team memberships.
@@ -110,20 +101,12 @@ def _get_memberships(username: str):
             "params": {"options": {"username": username}},
         }
     )
-    # Extract the important data from the result.
-    team_dict = dict()
+    # Extract the team names from the response.
+    team_list = list()
     if response.result.teams is not None:
         for team in response.result.teams:
-            user_role = ["iadmin", "reader", "writer", "admin", "owner"][
-                team.role
-            ]
-            team_data = {
-                "role": user_role,
-                "member_count": team.member_count,
-                "data": team,
-            }
-            team_dict[team.fq_name] = dict_to_ntuple(team_data)
-    return team_dict
+            team_list.append(team.fq_name)
+    return team_list
 
 
 def _get_username():
@@ -143,7 +126,7 @@ def _get_username():
     return username
 
 
-def _run_command(command: list):
+def _run_command(command):
     """Execute a console command and retrieve the result.
 
     This function is only intended to be used with Keybase console commands. It

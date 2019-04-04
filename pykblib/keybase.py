@@ -18,13 +18,13 @@ class Keybase:
 
     # Private Attributes
     # ------------------
-    # _team_data : dict
-    #     A dictionary of the teams to which the user belongs, corresponding
-    #     with their roles and the number of users in each team.
+    # _active_teams : dict
+    #     A dictionary of all the teams that have been spawned in this session.
 
     def __init__(self):
         """Initialize the Keybase class."""
         self.username = _get_username()
+        self._active_teams = dict()
         self.update_team_list()
 
     def create_team(self, team_name):
@@ -50,12 +50,18 @@ class Keybase:
             "method": "create-team",
             "params": {"options": {"team": team_name}},
         }
+        # Create the new team.
         response = _api_team(query)
         if hasattr(response, "error"):
             return False
+        # Add the team to the teams list.
         self.teams.append(team_name)
         self.teams.sort()
-        return self.team(team_name)
+        # Create a new Team instance for the new team.
+        team_instance = self.team(team_name)
+        # Append the new Team to the _active_teams dictionary.
+        self._active_teams[team_name] = team_instance
+        return team_instance
 
     def team(self, team_name):
         """Return a Team class instance for the specified team.
@@ -73,18 +79,20 @@ class Keybase:
         """
         # Create the new Team instance.
         team_instance = Team(team_name, self)
+        # Append the new Team to the _active_teams dictionary.
+        self._active_teams[team_name] = team_instance
         # Return the new team instance.
         return team_instance
 
     def update_team_list(self):
         """Update the Keybase.teams attribute."""
-        # Retrieve information about the team memberships.
-        self._team_data = _get_memberships(self.username)
-        # Extract the list of team names and store it in the teams attribute.
-        self.teams = list(self._team_data.keys())
+        self.teams = _get_memberships(self.username)
 
     def update_team_name(self, old_name, new_name):
         """Attempt to update the name of a team in the teams list.
+
+        This will also attempt to update the names of any sub-teams that have
+        been instantiated.
 
         Parameters
         ----------
@@ -101,7 +109,24 @@ class Keybase:
 
         """
         try:
-            self.teams[self.teams.index(old_name)] = new_name
+            # Update the teams list.
+            for team_name in self.teams:
+                if old_name in team_name:
+                    self.teams[self.teams.index(team_name)] = team_name.replace(old_name, new_name)
+            # Update the team name in the _active_teams dict.
+            if old_name in self._active_teams.keys():
+                self._active_teams[new_name] = self._active_teams.pop(old_name)
+            # Update any registered sub-teams with the new name.
+            teams_to_replace = list()
+            for name, team in self._active_teams.items():
+                if old_name in name:
+                    team.update_parent_team_name(old_name, new_name)
+                    teams_to_replace.append(name)
+            # Replace renamed sub-teams in the teams list.
+            for name in teams_to_replace:
+                self._active_teams[
+                    name.replace(old_name, new_name)
+                ] = self._active_teams.pop(name)
             return new_name in self.teams
         except ValueError:
             # The team name wasn't in the list.
