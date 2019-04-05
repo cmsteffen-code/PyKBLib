@@ -61,8 +61,11 @@ class Keybase:
         # Create the new team.
         response = _api_team(query)
         if hasattr(response, "error"):
-            if "already exists" not in response.error.message:
-                print("Error: {}".format(response.error.message))
+            if (
+                "already exists" not in response.error.message
+                and "already in use" not in response.error.message
+            ):
+                print("Error creating team: {}".format(response.error.message))
             return False
         # Add the team to the teams list.
         self.teams.append(team_name)
@@ -126,7 +129,7 @@ class Keybase:
         result = _run_command(
             ["keybase", "team", "ignore-request", team_name, "-u", username]
         )
-        if "Success!" in result or "Not found" in result:
+        if "Success!" in result or "not found" in result.lower():
             return True
         return False
 

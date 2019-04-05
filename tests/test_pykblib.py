@@ -9,22 +9,20 @@ created specifically for testing certain features of this suite. If this user
 should ever get deleted, the testing suite will need to be modified
 accordingly.
 
-To avoid problems, it is advised that you not use your main account for unit
-testing. After creating too many teams, your account could be prevented from
-creating further teams, which will cause the unit test to fail. For this reason
-it is best to create a disposable account for unit testing, then delete the
-account and create a new one when the account is no longer able to create new
-teams.
+Before running this test suite, you'll need to create the 'dev_team.txt' file
+if it doesn't already exist. Inside that file, write the name of a team you own
+that you intend to use for testing.
 """
 
 import random
 import string
+import sys
 from unittest import TestCase
 
 from pykblib import Keybase, Team
 
 TEST_USER_NAME = "pykblib"
-TEST_TEAM_NAME = "pykblib_dev_team.testing"
+DEV_TEAM_NAME = "pykblib_dev_team.testing"
 
 
 class KeybaseClassTest(TestCase):
@@ -33,6 +31,17 @@ class KeybaseClassTest(TestCase):
     @classmethod
     def setUpClass(cls):
         """Prepare the test suite for execution."""
+        # Ensure that the user has created their dev_team.txt file.
+        try:
+            with open("dev_team.txt", "r") as f:
+                test_team_name = f.readline().strip()
+        except FileNotFoundError:
+            print("I could not find the 'dev_team.txt' file, so I created it.")
+            print("Please edit the file and replace 'TEAM_NAME' with your")
+            print("development team's name. Then you can run unit tests.")
+            with open("dev_team.txt", "w") as f:
+                f.write("TEAM_NAME")
+            sys.exit(0)
         # Connect to Keybase.
         keybase = Keybase()
         cls.keybase = keybase
@@ -41,12 +50,16 @@ class KeybaseClassTest(TestCase):
         ), "Could not create keybase instance."
         # Leave the pykblib test team, if already a member.
         assert keybase.leave_team(
-            TEST_TEAM_NAME
+            DEV_TEAM_NAME
         ), "Could not leave dev test team."
         # Generate a random 16-character team name. (Keybase team names cannot
         # exceed 16 characters.) We'll assume the team doesn't already exist.
-        random_team_name = "".join(
-            [random.choice(string.ascii_lowercase) for _ in range(13)]
+        random_team_name = (
+            test_team_name
+            + "."
+            + "".join(
+                [random.choice(string.ascii_lowercase) for _ in range(13)]
+            )
         )
         cls.random_team_name = random_team_name
         # Create the test team.
@@ -55,6 +68,10 @@ class KeybaseClassTest(TestCase):
         assert isinstance(
             cls.test_team, Team
         ), "Could not create team instance."
+        # Join the test team.
+        assert cls.test_team.add_member(
+            keybase.username, "admin"
+        ), "Failed to join test team."
 
     @classmethod
     def tearDownClass(cls):
@@ -137,8 +154,8 @@ class KeybaseClassTest(TestCase):
         self.assertIsInstance(KeybaseClassTest.test_team, Team)
         # Attempt to join the dev test team.
         self.assertTrue(
-            KeybaseClassTest.keybase.request_access(TEST_TEAM_NAME),
-            "Could not request access to {}".format(TEST_TEAM_NAME),
+            KeybaseClassTest.keybase.request_access(DEV_TEAM_NAME),
+            "Could not request access to {}".format(DEV_TEAM_NAME),
         )
         # Ensure that list_requests returns a list.
         self.assertIsInstance(
@@ -206,7 +223,7 @@ class KeybaseClassTest(TestCase):
         )
         # Attempt to leave the dev test team.
         self.assertTrue(
-            KeybaseClassTest.keybase.leave_team(TEST_TEAM_NAME),
+            KeybaseClassTest.keybase.leave_team(DEV_TEAM_NAME),
             "Could not leave dev test team.",
         )
 
@@ -229,11 +246,6 @@ class KeybaseClassTest(TestCase):
         # Attempt to create a second sub-sub-team.
         sub_sub_team2 = sub_team.create_sub_team("subsub2")
         self.assertIsInstance(sub_sub_team2, Team)
-        # Attempt to rename the main team.
-        self.assertFalse(KeybaseClassTest.test_team.rename("this_should_fail"))
-        self.assertEqual(
-            KeybaseClassTest.test_team.name, KeybaseClassTest.random_team_name
-        )
         # Attempt to rename the sub team.
         self.assertTrue(sub_team.rename("sub2"))
         # Ensure that the name was changed, both for the sub_team and for the

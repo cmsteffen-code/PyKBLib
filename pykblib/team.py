@@ -44,6 +44,7 @@ class Team:
 
         """
         self.name = name
+        self.role = "None"
         self._keybase = parent
         # Update the member lists.
         if not self.update():

@@ -2,6 +2,7 @@
 deploy.sh
 keybase-chat-api.txt
 *.old.py
+dev_team.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
