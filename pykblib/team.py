@@ -348,6 +348,24 @@ class Team:
         self.name = new_name
         return True
 
+    def sub_team(self, sub_team_name):
+        """Return a Team instance referring to the specified sub-team.
+
+        Parameters
+        ----------
+        sub_team_name : str
+            The name of the sub-team.
+
+        Returns
+        -------
+        `Team` or `False`
+            If successful, the script will return a `Team` instance referring
+            to the sub-team. Otherwise, the function will return `False`.
+
+        """
+        team_name = self.name + "." + sub_team_name
+        return self._keybase.team(team_name)
+
     def update(self):
         """Update the team's membership and role information.
 

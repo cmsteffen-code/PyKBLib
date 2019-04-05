@@ -240,6 +240,9 @@ class KeybaseClassTest(TestCase):
         # Attempt to create a sub-team.
         sub_team = KeybaseClassTest.test_team.create_sub_team("sub1")
         self.assertIsInstance(sub_team, Team)
+        # Test the Team.sub_team function.
+        sub_team = KeybaseClassTest.test_team.sub_team("sub1")
+        self.assertIsInstance(sub_team, Team)
         # Attempt to create a sub-sub-team.
         sub_sub_team = sub_team.create_sub_team("subsub1")
         self.assertIsInstance(sub_sub_team, Team)

@@ -225,8 +225,9 @@ class Keybase:
 
         Returns
         -------
-        team_instance : Team
-            The Team class instance created by the function.
+        `Team` or `False`
+            If successful, the script will return a `Team` instance referring
+            to the specified team. Otherwise, the function will return `False`.
 
         """
         # Create the new Team instance.

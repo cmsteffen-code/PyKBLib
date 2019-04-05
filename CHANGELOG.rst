@@ -5,11 +5,11 @@ In-Development
 --------------
 - Implement Chat functionality.
 - Implement Wallet functionality.
-- Update the unit test framework to stop destroying perfectly good teams.
 
-1.2.1 (2019.04.04)
+1.3.0 (2019.04.04)
 ------------------
-
+- Updated the unit test framework to stop destroying perfectly good teams.
+- Added the Team.sub_team function.
 
 1.2.0 (2019.04.04)
 ------------------

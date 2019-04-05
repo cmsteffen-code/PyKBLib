@@ -34,7 +34,10 @@ def _api_base(service, query, attempts=0):
     response = json.loads(response)
     if hasattr(response, "error"):
         if "bad signature" in response.error.message:
-            time.sleep(2)
+            # This seems to be caused by lag between the client and server in
+            # the Keybase implementation, and the only solution I know of is
+            # to wait for it to pass.
+            time.sleep(5)
             return _api_base(service, query, attempts + 1)
     return dict_to_ntuple(response)
 

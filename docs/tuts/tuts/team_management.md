@@ -9,7 +9,15 @@ To interact with an existing team, you'll want to create an instance of the `Tea
 TEAM = KB.team("team_name")
 ```
 
-The above code will create a `Team` instance connected to the team called "team_name". (You'll want to change "team_name" to the name of the team with which you wish to interact.) It is possible to access team information without assigning the output from the `Keybase.team` function to a variable, like so:
+The above code will create a `Team` instance connected to the team called "team_name". (You'll want to change "team_name" to the name of the team with which you wish to interact.)
+
+In the same manner, you can retrieve an instance of a team's sub-teams by using the `Team.sub_team` function:
+
+```
+SUB_TEAM = TEAM.sub_team("sub_team_name")
+```
+
+It is possible to access team information without assigning the output from the `Keybase.team` function to a variable, like so:
 
 ```
 team_name = "team_name"
