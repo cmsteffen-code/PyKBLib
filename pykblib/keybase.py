@@ -7,6 +7,7 @@ from pykblib.functions import (
     _delete_team,
     _get_memberships,
     _get_username,
+    _run_command,
 )
 from pykblib.team import Team
 
@@ -48,9 +49,9 @@ class Keybase:
 
         Returns
         -------
-        Team or False
-            If the team is successfully created, this function will return a
-            Team object for the new team. Otherwise, it will return False.
+        `Team` or `False`
+            If successful, the script will return a `Team` instance referring
+            to the new team. Otherwise, the function will return `False`.
 
         """
         query = {
@@ -80,6 +81,11 @@ class Keybase:
         team_name : str
             The name of the team to be deleted.
 
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
         """
         allowed_characters = string.ascii_letters + string.digits + "_-."
         if any([letter not in allowed_characters for letter in team_name]):
@@ -99,6 +105,112 @@ class Keybase:
                 team_instance = self._active_teams.pop(team)
                 del team_instance
         return True
+
+    @staticmethod
+    def ignore_request(team_name, username):
+        """Attempt to ignore a user's access request to the specified team.
+
+        Parameters
+        ----------
+        team_name : str
+            The name of the team.
+        username : str
+            The name of the user to ignore.
+
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
+        """
+        result = _run_command(
+            ["keybase", "team", "ignore-request", team_name, "-u", username]
+        )
+        if "Success!" in result or "Not found" in result:
+            return True
+        return False
+
+    @staticmethod
+    def leave_team(team_name):
+        """Attempt to leave the specified team.
+
+        Parameters
+        ----------
+        team_name : str
+            The name of the team.
+
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
+        """
+        query = {
+            "method": "leave-team",
+            "params": {"options": {"team": team_name, "permanent": False}},
+        }
+        response = _api_team(query)
+        if hasattr(response, "error"):
+            if "not a member" not in response.error.message:
+                return False
+        return True
+
+    @staticmethod
+    def list_requests(team_name=None):
+        """List all requests to join any of the active user's teams.
+
+        If a team is specified, the function will list requests to that
+        specific team.
+
+        Parameters
+        ----------
+        team_name : str
+            (optional) The name of the team to be checked.
+
+        Returns
+        -------
+        usernames : list or tuple
+            A list of all the users which have requested access. If there was
+            no team name specified, this returns a tuple containing the team
+            name and username for each request: `[(team_name, username), ...]`
+
+        """
+        command_list = ["keybase", "team", "list-requests"]
+        if team_name is not None:
+            command_list += ["-t", team_name]
+        result = _run_command(command_list)
+        requests = [
+            line.strip()
+            for line in result.split("\n")
+            if "wants to join" in line
+        ]
+        if team_name is None:
+            return [(line.split()[0], line.split()[1]) for line in requests]
+        return [
+            line.split()[1]
+            for line in requests
+            if line.split()[0] == team_name
+        ]
+
+    @staticmethod
+    def request_access(team_name):
+        """Request access to the specified team name.
+
+        Parameters
+        ----------
+        team_name : str
+            The name of the team.
+
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
+        """
+        result = _run_command(["keybase", "team", "request-access", team_name])
+        if "an email has been sent" in result or "already requested" in result:
+            return True
+        return False
 
     def team(self, team_name):
         """Return a Team class instance for the specified team.
@@ -141,8 +253,7 @@ class Keybase:
         Returns
         -------
         bool
-            Returns `True` or `False`, dependent on whether the update was
-            successful.
+            `True` or `False`, dependent on whether the function succeeded.
 
         """
         try:

@@ -9,4 +9,4 @@ This section will detail how to use PyKBLib to interface with the Keybase comman
    tuts/connecting_to_keybase
    tuts/user_information
    tuts/team_management
-   tuts/team_interaction
+   tuts/team_member_management

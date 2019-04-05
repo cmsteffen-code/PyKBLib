@@ -1,72 +1,50 @@
-Interacting with Teams
-======================
+Managing Team Members
+=====================
 
-Creating a Team Instance
-------------------------
-To interact with a team directly, you'll want to create an instance of the `Team` class. This can be done by using the `Keybase.team` function:
+Listing Requests to Join a Team
+-------------------------------
+When a user requests access to your team, if the team is set as "open," their request will automatically be approved. However, if the team is not open, then you'll need to be able to determine which users have requested access to which teams. To do this, you can use either the `Keybase.list_requests` function or the `Team.list_requests` function.
 
-```
-TEAM = KB.team("team_name")
-```
-
-The above code will create a `Team` instance connected to the team called "team_name". (You'll want to change "team_name" to the name of the team with which you wish to interact.) It is possible to access team information without assigning the output from the `Keybase.team` function to a variable, like so:
+The `Keybase.list_requests` function allows you to specify an optional team name. If you don't specify the team name, the function will return tuples for each of the teams with requests:
 
 ```
-team_name = "team_name"
-member_count = len(KB.team(team_name).members())
-print(f"The '{team_name}' team has {member_count} members.")
+>>> KB.list_requests()
+[('pykblib_dev_team.testing', 'demo_user'), ('pykblib_dev_team', 'demo_user')]
 ```
 
-However, if you need to interact with the team more than once, it is best to store the `Team` instance in a variable, as in the first example. Each time you instantiate a `Team`, there will be a slight delay as the script communicates with the Keybase app, so it's faster to store the `Team` object in a variable rather than creating it repeatedly.
+The tuples returned are in the format `(team_name, username)`.
 
-In the following tutorials, we'll refer to the `TEAM` variable when showing how to interact with `Team` objects.
-
-Accessing Team Information
---------------------------
-Most information about a team is accessible through the `Team` class' attributes. So far, the following attributes have been implemented:
-
-* `Team.name` (*str*) The name of the team.
-* `Team.role` (*str*) The team role assigned to the current user.
-* `Team.members_by_role` (*namedtuple*) A namedtuple containing lists of members sorted into their respective roles:
-    * `Team.members_by_role.owner` (*list*) A list of all the owners of the team.
-    * `Team.members_by_role.admin` (*list*) A list of all the admins of the team.
-    * `Team.members_by_role.writer` (*list*) A list of all the writers in the team.
-    * `Team.members_by_role.reader` (*list*) A list of all the readers in the team.
-    * `Team.members_by_role.deleted` (*list*) A list of members who have deleted their accounts.
-    * `Team.members_by_role.reset` (*list*) A list of members who have reset their accounts.
-
-You can also get a complete list of active members using the `Team.members` function.
-
-If you wanted to print out a summary of this information, you could do the following:
+If you instead choose to specify the name of the team, the `Keybase.list_requests` function will return a list of members who have requested access:
 
 ```
-print(f"Information for team {TEAM.name}:")
-print(f"- role: {TEAM.role}")
-print("- team members:")
-for member in TEAM.members():
-    print(f"  - {member}")
-roles = {
-    "owners": TEAM.members_by_role.owner,
-    "admins": TEAM.members_by_role.admin,
-    "writers": TEAM.members_by_role.writer,
-    "readers": TEAM.members_by_role.reader,
-    "deleted accounts": TEAM.members_by_role.deleted,
-    "reset accounts": TEAM.members_by_role.reset,
-}
-for role, member_list in roles.items():
-    print(f"- {role}")
-    for member in member_list:
-        print(f"  - {member}")
+>>> KB.list_requests("pykblib_dev_team")
+['demo_user']
 ```
 
-The membership and role information is populated at the creation of the `Team` instance. Any time the library is used to update team member information, those changes are saved as well. However, any changes made outside the script will not be automatically recorded. In order to update the team membership information, simply use the `Team.update` function:
+If you've already created an instance of a team and you wish to list the requests for that team, you can also use the `Team.list_requests` function:
 
 ```
-# Update the team's membership and role information.
-TEAM.update()
+>>> TEAM.list_requests()
+['demo_user']
 ```
 
-Note that this function incurs a slight delay, due to the fact that it must retrieve fresh information from Keybase.
+The `Team.list_requests` function will return only the usernames of members who have requested access to that specific team.
+
+Ignoring Requests to Join a Team
+--------------------------------
+To ignore an incoming request, you can use the `Keybase.ignore_request` function, or if you've already got an instance of the team, you can use the `Team.ignore_request` function. The `Keybase.ignore_request` function requires two arguments, the team name and username:
+
+```
+KB.ignore_request("pykblib_dev_team.testing", "demo_user")
+```
+
+On the other hand, the `Team.ignore_request` function only requires the username:
+
+```
+TEAM.ignore_request("demo_user")
+```
+
+This will ignore the specified user's request, and will prevent that user from making additional requests.
 
 Adding and Removing Members
 ---------------------------

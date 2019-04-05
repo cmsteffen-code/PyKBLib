@@ -4,9 +4,17 @@ This test suite assumes that you've got Keybase running on your system. It also
 assumes that a user is logged in.
 
 This test suite also assumes the continued existence of the Keybase user known
-as `pykblib`, which was created specifically for testing certain features of
-this suite. If this user should ever get deleted, the testing suite will need
-to be modified accordingly.
+as `pykblib` and the Keybase team called `pykblib_dev_team`, each of which was
+created specifically for testing certain features of this suite. If this user
+should ever get deleted, the testing suite will need to be modified
+accordingly.
+
+To avoid problems, it is advised that you not use your main account for unit
+testing. After creating too many teams, your account could be prevented from
+creating further teams, which will cause the unit test to fail. For this reason
+it is best to create a disposable account for unit testing, then delete the
+account and create a new one when the account is no longer able to create new
+teams.
 """
 
 import random
@@ -16,6 +24,7 @@ from unittest import TestCase
 from pykblib import Keybase, Team
 
 TEST_USER_NAME = "pykblib"
+TEST_TEAM_NAME = "pykblib_dev_team.testing"
 
 
 class KeybaseClassTest(TestCase):
@@ -24,23 +33,25 @@ class KeybaseClassTest(TestCase):
     @classmethod
     def setUpClass(cls):
         """Prepare the test suite for execution."""
-        KB = Keybase()
-        cls.keybase = KB
+        # Connect to Keybase.
+        keybase = Keybase()
+        cls.keybase = keybase
         assert isinstance(
             cls.keybase, Keybase
         ), "Could not create keybase instance."
+        # Leave the pykblib test team, if already a member.
+        assert keybase.leave_team(
+            TEST_TEAM_NAME
+        ), "Could not leave dev test team."
         # Generate a random 16-character team name. (Keybase team names cannot
         # exceed 16 characters.) We'll assume the team doesn't already exist.
         random_team_name = "".join(
-            [
-                random.choice(string.ascii_lowercase + string.digits)
-                for _ in range(16)
-            ]
+            [random.choice(string.ascii_lowercase) for _ in range(13)]
         )
         cls.random_team_name = random_team_name
         # Create the test team.
-        TEAM = KB.create_team(random_team_name)
-        cls.test_team = TEAM
+        team = keybase.create_team(random_team_name)
+        cls.test_team = team
         assert isinstance(
             cls.test_team, Team
         ), "Could not create team instance."
@@ -124,6 +135,27 @@ class KeybaseClassTest(TestCase):
         """Check whether team member management is working properly."""
         # Ensure that the KeybaseClassTest.test_team variable is a Team.
         self.assertIsInstance(KeybaseClassTest.test_team, Team)
+        # Attempt to join the dev test team.
+        self.assertTrue(
+            KeybaseClassTest.keybase.request_access(TEST_TEAM_NAME),
+            "Could not request access to {}".format(TEST_TEAM_NAME),
+        )
+        # Ensure that list_requests returns a list.
+        self.assertIsInstance(
+            KeybaseClassTest.keybase.list_requests(),
+            list,
+            "Keybase.list_requests failed to return a list.",
+        )
+        # Attempt to ignore the test user's request to join our team.
+        self.assertTrue(
+            KeybaseClassTest.test_team.ignore_request(TEST_USER_NAME),
+            "Could not ignore request by test user.",
+        )
+        requests = KeybaseClassTest.test_team.list_requests()
+        self.assertIsInstance(
+            requests, list, "Team.list_requests failed to return a list."
+        )
+        self.assertTrue(requests == [])
         # Attempt to add the test user to the team as a writer.
         self.assertEqual(
             KeybaseClassTest.test_team.add_member(TEST_USER_NAME, "writer"),
@@ -171,6 +203,11 @@ class KeybaseClassTest(TestCase):
         # Attempt to remove the fake user from the team.
         self.assertEqual(
             KeybaseClassTest.test_team.remove_member(fake_user), False
+        )
+        # Attempt to leave the dev test team.
+        self.assertTrue(
+            KeybaseClassTest.keybase.leave_team(TEST_TEAM_NAME),
+            "Could not leave dev test team.",
         )
 
     def test_team_management(self):

@@ -14,8 +14,6 @@ class Team:
         The name of the team.
     role : str
         The role assigned to the active user within this team.
-    members : list
-        A list of the usernames of all active members in the team.
     members_by_role : namedtuple
         A namedtuple comprising lists of members by specified role. To access
         the lists, use one of the following:
@@ -171,9 +169,9 @@ class Team:
 
         Returns
         -------
-        Team or False
-            This will either return a new Team object if the sub-team is
-            successfully created, or `False` if creation fails.
+        `Team` or `False`
+            If successful, the script will return a `Team` instance referring
+            to the new team. Otherwise, the function will return `False`.
 
         """
         full_name = self.name + "." + team_name
@@ -189,6 +187,44 @@ class Team:
 
         """
         return self._keybase.delete_team(self.name)
+
+    def ignore_request(self, username):
+        """Attempt to ignore a user's access request to this team.
+
+        Parameters
+        ----------
+        username : str
+            The name of the user to ignore.
+
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
+        """
+        return self._keybase.ignore_request(self.name, username)
+
+    def leave(self):
+        """Attempt to leave this team.
+
+        Returns
+        -------
+        bool
+            `True` or `False`, dependent on whether the function succeeded.
+
+        """
+        return self._keybase.leave_team(self.name)
+
+    def list_requests(self):
+        """List all requests to join this team.
+
+        Returns
+        -------
+        usernames : list
+            A list of all the users which have requested access.
+
+        """
+        return self._keybase.list_requests(self.name)
 
     def members(self):
         """Return a list of all active members in the team.

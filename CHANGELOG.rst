@@ -3,9 +3,13 @@ Release History
 
 In-Development
 --------------
-- Expand Team functionality.
 - Implement Chat functionality.
 - Implement Wallet functionality.
+
+1.2.0 (2019.04.04)
+------------------
+- Enabled users to request access to teams, leave teams, and list requests to their teams.
+- Enabled users to ignore requests to join their teams.
 
 1.1.0 (2019.04.04)
 ------------------

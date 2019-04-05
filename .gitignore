@@ -1,6 +1,5 @@
 # PyKBLib-Specific
 deploy.sh
-unittest.sh
 keybase-chat-api.txt
 *.old.py
 
