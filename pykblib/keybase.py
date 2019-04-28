@@ -1,117 +1,125 @@
-"""Contains the Keybase class definition."""
+"""Defines the core Keybase class."""
 
-import string
+from collections import defaultdict
 
-from pykblib.functions import (
-    _api_team,
-    _delete_team,
-    _get_memberships,
-    _get_username,
-    _run_command,
-)
+from pykblib.api import KeybaseAPI
+from pykblib.exceptions import APIException, KeybaseException, TeamException
 from pykblib.team import Team
 
 
 class Keybase:
-    """The primary point of interaction with PyKBLib.
+    """Provides a high-level interface for interacting with Keybase.
 
     Attributes
     ----------
     teams : list
-        A list of the names of teams to which the active user is subscribed.
+        The list of teams to which the active user belongs.
     username : str
-        The name of the user logged into Keybase.
+        The username of the active user.
 
     """
 
-    # Private Attributes
-    # ------------------
-    # _active_teams : dict
-    #     A dictionary of all the teams that have been spawned in this session.
-
     def __init__(self):
-        """Initialize the Keybase class."""
-        self.username = _get_username()
+        """Ensure that the class has everything it needs to succeed."""
         self._active_teams = dict()
+        self._api = KeybaseAPI()
+        self.username = self._get_username()
+        self.teams = list()
         self.update_team_list()
 
-    def create_team(self, team_name):
-        """Attempt to create a new Keybase Team.
+    def _get_username(self):
+        """Retrieve the username of the active user.
 
-        If the team is successfully created, the team's name will be added to
-        the `Keybase.teams` list and an instance of `Team` will be returned.
-        Otherwise, the function will return `False`.
+        Returns
+        -------
+        username : str
+            The username of the active user.
+
+        Raises
+        ------
+        KeybaseException
+            If there is not a user logged in, the function will raise a
+            KeybaseException.
+
+        """
+        status = self._api.run_command("status")
+        [userline, statusline] = status.split("\n")[:2]
+        username = userline.split()[1]
+        online = statusline.split()[2]
+        if online == "no":
+            raise KeybaseException("User must be logged in.")
+        return username
+
+    def create_team(self, team_name):
+        """Create a team with the specified name.
 
         Parameters
         ----------
         team_name : str
             The name of the team to be created.
 
-        Returns
-        -------
-        `Team` or `False`
-            If successful, the script will return a `Team` instance referring
-            to the new team. Otherwise, the function will return `False`.
+        Raises
+        ------
+        KeybaseException
+            If the team can't be created, a KeybaseException is raised.
 
         """
         query = {
             "method": "create-team",
             "params": {"options": {"team": team_name}},
         }
-        # Create the new team.
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            if (
-                "already exists" not in response.error.message
-                and "already in use" not in response.error.message
-            ):
-                print("Error creating team: {}".format(response.error.message))
-            return False
-        # Add the team to the teams list.
+        success = True
+        try:
+            response = self._api.call_api("team", query)
+            if not hasattr(response.result, "creatorAdded"):
+                success = False
+        except APIException:
+            success = False
+        if not success:
+            raise KeybaseException(
+                "Could not create team {}.".format(team_name)
+            )
         self.teams.append(team_name)
-        self.teams.sort()
-        # Create a new Team instance for the new team.
-        team_instance = self.team(team_name)
-        # Append the new Team to the _active_teams dictionary.
-        self._active_teams[team_name] = team_instance
-        return team_instance
+        return self.team(team_name)
 
     def delete_team(self, team_name):
-        """Attempt to delete the specified team and all of its sub-teams.
+        """Delete the specified team, and all of its sub-teams.
 
         Parameters
         ----------
         team_name : str
             The name of the team to be deleted.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        KeybaseException
+            If the team isn't in the Keybase.teams list, or if an APIException
+            is raised when attempting to call the KeybaseAPI.delete_team
+            function, this function will raise a KeybaseException.
 
         """
-        allowed_characters = string.ascii_letters + string.digits + "_-."
-        if any([letter not in allowed_characters for letter in team_name]):
-            # We want to prevent any kind of mischief with malformed names.
-            return False
-        # Compile a list of teams to be deleted.
-        teams = [team for team in self.teams if team.startswith(team_name)]
-        if team_name not in teams:
-            return False
-        # Delete each of the returned teams, starting with sub-teams.
-        for team in sorted(teams, key=len, reverse=True):
-            if not _delete_team(team):
-                return False
-            # Remove this team's record from self.teams and self._active_teams.
-            self.teams.pop(self.teams.index(team))
-            if team in self._active_teams.keys():
-                team_instance = self._active_teams.pop(team)
-                del team_instance
-        return True
+        teams_to_delete = sorted(
+            [team for team in self.teams if team.startswith(team_name)],
+            key=len,
+            reverse=True,
+        )
+        if team_name not in teams_to_delete:
+            raise KeybaseException(
+                "Active user is not a member of team {}.".format(team_name)
+            )
+        for team in teams_to_delete:
+            try:
+                self._api.delete_team(team)
+                self.teams.pop(self.teams.index(team))
+                if team in self._active_teams.keys():
+                    del self._active_teams[team]
+            except APIException:
+                raise KeybaseException(
+                    "Could not delete team {}.".format(team)
+                )
 
-    @staticmethod
-    def ignore_request(team_name, username):
-        """Attempt to ignore a user's access request to the specified team.
+    def ignore_request(self, team_name, username):
+        """Ignore a user's access request to the specified team.
 
         Parameters
         ----------
@@ -120,83 +128,95 @@ class Keybase:
         username : str
             The name of the user to ignore.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        KeybaseException
+            If the request could not be ignored, the function will raise a
+            KeybaseException.
 
         """
-        result = _run_command(
-            ["keybase", "team", "ignore-request", team_name, "-u", username]
-        )
-        if "Success!" in result or "not found" in result.lower():
-            return True
-        return False
+        try:
+            self._api.run_command(
+                "team ignore-request {} -u {}".format(team_name, username)
+            )
+        except APIException as exception:
+            if "Not found" not in exception.message:
+                raise KeybaseException(
+                    "Failed to ignore request by {} to join {}.".format(
+                        username, team_name
+                    )
+                )
 
-    @staticmethod
-    def leave_team(team_name):
-        """Attempt to leave the specified team.
+    def leave_team(self, team_name):
+        """Leave the specified team.
 
         Parameters
         ----------
         team_name : str
             The name of the team.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        KeybaseException
+            If the user could not leave the team, the function will raise a
+            KeybaseException.
 
         """
         query = {
             "method": "leave-team",
             "params": {"options": {"team": team_name, "permanent": False}},
         }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            if "not a member" not in response.error.message:
-                return False
-        return True
+        try:
+            self._api.call_api("team", query)
+        except APIException as exception:
+            if "not a member" not in exception.message:
+                raise KeybaseException(
+                    "Could not leave team {}.".format(team_name)
+                )
+        if team_name in self.teams:
+            self.teams.pop(self.teams.index(team_name))
+        if team_name in self._active_teams.keys():
+            del self._active_teams[team_name]
 
-    @staticmethod
-    def list_requests(team_name=None):
-        """List all requests to join any of the active user's teams.
+    def list_requests(self, team_name=None):
+        """Retrieve a dictionary of all access requests for the specified team.
 
-        If a team is specified, the function will list requests to that
-        specific team.
+        If no team is specified, the dictionary will contain all requests for
+        all teams.
 
         Parameters
         ----------
         team_name : str
-            (optional) The name of the team to be checked.
+            The name of the target team. Defaults to None.
 
         Returns
         -------
-        usernames : list or tuple
-            A list of all the users which have requested access. If there was
-            no team name specified, this returns a tuple containing the team
-            name and username for each request: `[(team_name, username), ...]`
+        requests : dict
+            A dict with team names for keys and sets of usernames as values.
+
+        Raises
+        ------
+        KeybaseException
+            If the function couldn't retrieve the list of access requests, it
+            will raise a KeybaseException.
 
         """
-        command_list = ["keybase", "team", "list-requests"]
-        if team_name is not None:
-            command_list += ["-t", team_name]
-        result = _run_command(command_list)
-        requests = [
-            line.strip()
-            for line in result.split("\n")
-            if "wants to join" in line
-        ]
-        if team_name is None:
-            return [(line.split()[0], line.split()[1]) for line in requests]
-        return [
-            line.split()[1]
-            for line in requests
-            if line.split()[0] == team_name
-        ]
+        command = "team list-requests"
+        command += " -t {}".format(team_name) if team_name else ""
+        result = self._api.run_command(command)
+        if "To handle requests" not in result and "No requests" not in result:
+            raise KeybaseException("Could not retrieve access requests.")
+        lines = [line.strip() for line in result.split("\n")]
+        requests = defaultdict(set)
+        for line in lines:
+            if "wants to join" in line:
+                parts = line.split()
+                team_name = parts[0]
+                user_name = parts[1]
+                requests[team_name].add(user_name)
+        return requests
 
-    @staticmethod
-    def request_access(team_name):
+    def request_access(self, team_name):
         """Request access to the specified team name.
 
         Parameters
@@ -204,16 +224,29 @@ class Keybase:
         team_name : str
             The name of the team.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        KeybaseException
+            If the request could not be sent, the function will raise a
+            KeybaseException.
 
         """
-        result = _run_command(["keybase", "team", "request-access", team_name])
-        if "an email has been sent" in result or "already requested" in result:
-            return True
-        return False
+        try:
+            result = self._api.run_command(
+                "team request-access {}".format(team_name)
+            )
+            if (
+                "an email has been sent" not in result
+                and "You have joined" not in result
+            ):
+                raise KeybaseException(
+                    "Could not request access to {}.".format(team_name)
+                )
+        except APIException as exception:
+            if "already requested" not in exception.message:
+                raise KeybaseException(
+                    "Could not request access to {}.".format(team_name)
+                )
 
     def team(self, team_name):
         """Return a Team class instance for the specified team.
@@ -225,24 +258,41 @@ class Keybase:
 
         Returns
         -------
-        `Team` or `False`
+        Team
             If successful, the script will return a `Team` instance referring
-            to the specified team. Otherwise, the function will return `False`.
+            to the specified team.
+
+        Raises
+        ------
+        KeybaseException
+            If the team instance could not be created, a KeybaseException is
+            raised.
 
         """
-        # Create the new Team instance.
-        team_instance = Team(team_name, self)
-        # Append the new Team to the _active_teams dictionary.
-        self._active_teams[team_name] = team_instance
-        # Return the new team instance.
-        return team_instance
+        try:
+            new_team = Team(team_name, self)
+            self._active_teams[team_name] = new_team
+            return new_team
+        except TeamException:
+            raise KeybaseException(
+                "Could not create team {}.".format(team_name)
+            )
 
     def update_team_list(self):
-        """Update the Keybase.teams attribute."""
-        self.teams = _get_memberships(self.username)
+        """Update the list of teams to which the active member belongs."""
+        query = {
+            "method": "list-user-memberships",
+            "params": {"options": {"username": self.username}},
+        }
+        response = self._api.call_api("team", query)
+        team_set = set()
+        if response.result.teams is not None:
+            for team in response.result.teams:
+                team_set.add(team.fq_name)
+        self.teams = sorted(list(team_set))
 
-    def update_team_name(self, old_name, new_name):
-        """Attempt to update the name of a team in the teams list.
+    def _update_team_name(self, old_name, new_name):
+        """Update the name of a team in the teams list.
 
         This will also attempt to update the names of any sub-teams that have
         been instantiated.
@@ -254,34 +304,21 @@ class Keybase:
         new_name : str
             The new name of the team.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
-
         """
-        try:
-            # Update the teams list.
-            for team_name in self.teams:
-                if old_name in team_name:
-                    self.teams[
-                        self.teams.index(team_name)
-                    ] = team_name.replace(old_name, new_name)
-            # Update the team name in the _active_teams dict.
-            if old_name in self._active_teams.keys():
-                self._active_teams[new_name] = self._active_teams.pop(old_name)
-            # Update any registered sub-teams with the new name.
-            teams_to_replace = list()
-            for name, team in self._active_teams.items():
-                if old_name in name:
-                    team.update_parent_team_name(old_name, new_name)
-                    teams_to_replace.append(name)
-            # Replace renamed sub-teams in the teams list.
-            for name in teams_to_replace:
-                self._active_teams[
-                    name.replace(old_name, new_name)
-                ] = self._active_teams.pop(name)
-            return new_name in self.teams
-        except ValueError:
-            # The team name wasn't in the list.
-            return False
+        # Update the teams list.
+        for team_name in self.teams:
+            if old_name in team_name:
+                self.teams[self.teams.index(team_name)] = team_name.replace(
+                    old_name, new_name
+                )
+        # Update any registered sub-teams with the new name.
+        teams_to_replace = list()
+        for name, team in self._active_teams.items():
+            if old_name in name:
+                team._update_parent_team_name(old_name, new_name)
+                teams_to_replace.append(name)
+        # Replace renamed sub-teams in the teams list.
+        for name in teams_to_replace:
+            self._active_teams[
+                name.replace(old_name, new_name)
+            ] = self._active_teams.pop(name)

@@ -3,8 +3,11 @@ Release History
 
 In-Development
 --------------
-- Implement Chat functionality.
-- Implement Wallet functionality.
+- Add chat functionality.
+
+2.0.0 (2019.04.28)
+------------------
+- Completely re-wrote the pykblib and tests modules with proper mocking and unit tests.
 
 1.3.0 (2019.04.04)
 ------------------

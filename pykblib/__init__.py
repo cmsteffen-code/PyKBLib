@@ -1,4 +1,3 @@
-"""A Python library for interacting with the Keybase CLI tools."""
+"""The PyKBLib library provides a simple API for interacting with Keybase."""
 
 from pykblib.keybase import Keybase
-from pykblib.team import Team

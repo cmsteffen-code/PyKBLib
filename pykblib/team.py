@@ -1,22 +1,23 @@
-"""Contains the Team class definition."""
+"""Defines the Team class."""
 
 from steffentools import dict_to_ntuple
 
-from pykblib.functions import _api_team
+from pykblib.api import KeybaseAPI
+from pykblib.exceptions import APIException, KeybaseException, TeamException
 
 
 class Team:
-    """An instance of a Keybase team.
+    """The primary point of interaction with Keybase teams.
 
     Attributes
     ----------
     name : str
         The name of the team.
     role : str
-        The role assigned to the active user within this team.
+        The active user's role within the team.
     members_by_role : namedtuple
-        A namedtuple comprising lists of members by specified role. To access
-        the lists, use one of the following:
+        A namedtuple comprising unordered sets of members by specified role. To
+        access the sets, use one of the following:
 
         * **Team.members_by_role.owner**
         * **Team.members_by_role.admin**
@@ -27,31 +28,29 @@ class Team:
 
     """
 
-    def __init__(self, name, parent):
+    def __init__(self, team_name, keybase_instance):
         """Initialize the Team class.
 
         Parameters
         ----------
-        name : str
+        team_name : str
             The team's name.
-        parent : Keybase
+        keybase_instance : Keybase
             The Keybase object that spawned this Team.
 
-        Raises
-        ------
-        AssertionError
-            If the team cannot be initialized, this raises an AssertionError.
-
         """
-        self.name = name
+        self._api = KeybaseAPI()
+        self._keybase = keybase_instance
+        self.members_by_role = None  # Populated by self.update()
+        self.name = team_name
         self.role = "None"
-        self._keybase = parent
-        # Update the member lists.
-        if not self.update():
-            raise AssertionError("Cannot initialize team {}.".format(name))
+        self.update()
 
     def add_member(self, username, role="reader"):
-        """Attempt to add the specified user to this team.
+        """Add the specified user to this team.
+
+        *Note: This function is simply a wrapper for the `Team.add_members`
+        function, where the username_list parameter contains only one item.*
 
         Parameters
         ----------
@@ -62,16 +61,25 @@ class Team:
             writer, admin, or owner. In order to assign the owner role, the
             current user must be an owner of the team. *(Defaults to reader.)*
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        TeamException
+            If the user could not be added, a TeamException is raised.
 
         """
-        return self.add_members([username], role)
+        self.add_members([username], role)
 
-    def add_members(self, usernames, role="reader"):
-        """Attempt to add the specified users to this team.
+    def add_members(self, username_list, role="reader"):
+        """Add the specified users to this team.
+
+        *Note: Keybase adds the specified users one at a time, but still
+        returns an error if any of the users cannot be added to the team. For
+        example, if the first two users are successfully added to the team, but
+        the third user fails, the function will raise an error, despite the
+        fact that the first two users were successfully added. As a result, if
+        an attempt to add multiple users fails, it is advised to run the
+        `Team.update()` function to update the member lists, to determine
+        whether any of the specified users were successfully added.*
 
         Parameters
         ----------
@@ -82,49 +90,50 @@ class Team:
             writer, admin, or owner. In order to assign the owner role, the
             current user must be an owner of the team. *(Defaults to reader.)*
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        TeamException
+            If the users couldn't be added, a TeamException is raised.
 
         """
-        username_list = [
-            {"username": username, "role": role} for username in usernames
-        ]
         query = {
             "method": "add-members",
             "params": {
-                "options": {"team": self.name, "usernames": username_list}
+                "options": {
+                    "team": self.name,
+                    "usernames": [
+                        {"username": username, "role": role}
+                        for username in username_list
+                    ],
+                }
             },
         }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            return False
-        roles = {
-            "owner": self.members_by_role.owner,
-            "admin": self.members_by_role.admin,
-            "writer": self.members_by_role.writer,
-            "reader": self.members_by_role.reader,
-        }
-        roles[role] += usernames
-        return True
+        try:
+            self._api.call_api("team", query)
+            roles = self.members_by_role._asdict()
+            roles[role] = roles[role].union(set(username_list))
+            self.members_by_role = dict_to_ntuple(roles)
+        except APIException:
+            raise TeamException(
+                "Could not add members to team {}.".format(self.name)
+            )
 
-    def change_member_role(self, username, role):
+    def change_member_role(self, username, new_role):
         """Change the specified user's role within this team.
 
         Parameters
         ----------
         username : str
             The username of the member whose role will be changed.
-        role : str
+        new_role : str
             The role to assign to the member. This must be either reader,
             writer, admin, or owner. In order to assign the owner role, the
             current user must be an owner of the team.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        TeamException
+            If the user's role could not be changed, a TeamException is raised.
 
         """
         query = {
@@ -133,30 +142,27 @@ class Team:
                 "options": {
                     "team": self.name,
                     "username": username,
-                    "role": role,
+                    "role": new_role,
                 }
             },
         }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            return False
-        roles = {
-            "owner": self.members_by_role.owner,
-            "admin": self.members_by_role.admin,
-            "writer": self.members_by_role.writer,
-            "reader": self.members_by_role.reader,
-        }
-        for member_role, member_list in roles.items():
-            # Remove the user from their previous role and add them to their
-            # new role.
-            if role != member_role and username in member_list:
-                member_list.pop(member_list.index(username))
-            elif role == member_role and username not in member_list:
-                member_list.append(username)
-        return True
+        try:
+            self._api.call_api("team", query)
+        except APIException:
+            raise TeamException(
+                "Could not change member {} to role {} in team {}.".format(
+                    username, new_role, self.name
+                )
+            )
+        member_dict = self.members_by_role._asdict()
+        for key in member_dict.keys():
+            if key == new_role:
+                member_dict[key].add(username)
+            elif username in member_dict[key]:
+                member_dict[key].remove(username)
 
-    def create_sub_team(self, team_name):
-        """Attempt to create a sub-team within this team.
+    def create_sub_team(self, sub_team_name):
+        """Create a sub-team within this team.
 
         This function simply calls `Keybase.create_team` with the appropriate
         full team name, a concatenation of the parent team and sub-team names,
@@ -164,189 +170,240 @@ class Team:
 
         Parameters
         ----------
-        team_name : str
+        sub_team_name : str
             The name of the sub-team to be created. The final team name will be
-            `parent_team.team_name` where `parent_team` is this team's name.
+            `parent.sub_team_name` where `parent` is this team's name.
 
-        Returns
-        -------
-        `Team` or `False`
-            If successful, the script will return a `Team` instance referring
-            to the new team. Otherwise, the function will return `False`.
+        Raises
+        ------
+        TeamException
+            If the sub-team cannot be created, a TeamException is raised.
 
         """
-        full_name = self.name + "." + team_name
-        return self._keybase.create_team(full_name)
+        full_name = "{}.{}".format(self.name, sub_team_name)
+        try:
+            return self._keybase.create_team(full_name)
+        except KeybaseException:
+            raise TeamException(
+                "Could not create sub-team {}.".format(full_name)
+            )
 
     def delete(self):
-        """Attempt to delete this team and all of its sub-teams.
+        """Delete this team and all of its sub-teams.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        *Note: This is simply a wrapper for the Keybase.delete_team function,
+        passing this team's name as the team to be deleted.*
+
+        Raises
+        ------
+        KeybaseException
+            If the team cannot be deleted, a KeybaseException is raised.
 
         """
-        return self._keybase.delete_team(self.name)
+        self._keybase.delete_team(self.name)
 
     def ignore_request(self, username):
-        """Attempt to ignore a user's access request to this team.
+        """Ignore the specified user's request to join this team.
 
-        Parameters
-        ----------
-        username : str
-            The name of the user to ignore.
+        This function is a wrapper for Keybase.ignore_request, passing this
+        team's name and the specified username as the target.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        KeybaseException
+            If the request cannot be ignored, a KeybaseException will be
+            raised.
 
         """
-        return self._keybase.ignore_request(self.name, username)
+        self._keybase.ignore_request(self.name, username)
 
     def leave(self):
-        """Attempt to leave this team.
+        """Leave this team.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        This function is a wrapper for Keybase.leave_team, passing this team's
+        name as the target.
+
+        Raises
+        ------
+        KeybaseException
+            If the active user could not leave the team, a KeybaseException is
+            raised.
 
         """
-        return self._keybase.leave_team(self.name)
+        self._keybase.leave_team(self.name)
 
     def list_requests(self):
-        """List all requests to join this team.
+        """Retrieve all requests to join this team.
+
+        This function is a wrapper for Keybase.list_requests, retrieving and
+        returning only the set of usernames requesting access to this team.
 
         Returns
         -------
-        usernames : list
-            A list of all the users which have requested access.
+        usernames : set
+            A set containing all the users who have requested access to this
+            team.
+
+        Raises
+        ------
+        KeybaseException
+            Should an error occur, this function will raise a KeybaseException.
 
         """
-        return self._keybase.list_requests(self.name)
+        return self._keybase.list_requests(self.name)[self.name]
 
     def members(self):
-        """Return a list of all active members in the team.
+        """Retrieve a set of the usernames of all members in the team.
+
+        *Note: This includes users who have deleted or reset their accounts.*
 
         Returns
         -------
-        members : list
-            A list of all active members in the team.
+        members : set
+            A set of the usernames of all members in the team.
 
         """
-        active_member_lists = [
-            self.members_by_role.owner,
-            self.members_by_role.admin,
-            self.members_by_role.writer,
-            self.members_by_role.reader,
-        ]
-        members = list()
-        for member_list in active_member_lists:
-            members += member_list
-        members = sorted(list(set(members)))
-        return members
+        return set(
+            set().union(
+                *[
+                    member_set
+                    for member_set in self.members_by_role._asdict().values()
+                ]
+            )
+        )
 
     def purge_deleted(self):
-        """Purge deleted members from this team.
+        """Purge members whose accounts were deleted.
 
-        Returns
-        -------
-        failures : list
-            A list of members that were unable to be deleted. If all members
-            were deleted successfully, this list will be empty.
+        This function is a wrapper for Team.remove_member, which automatically
+        targets members who have deleted their accounts.
+
+        *Note: Even if a TeamException is raised, it's possible that some of
+        the deleted users were successfully removed. The usernames listed in
+        Team.members_by_role.deleted will contain those that were unable to be
+        purged.*
+
+        Raises
+        ------
+        TeamException
+            If some or all of the deleted users could not be purged, a
+            TeamException will be raised.
 
         """
-        failures = list()
-        for username in self.members_by_role.deleted:
-            if not self.remove_member(username):
-                failures.append(username)
-        self.members_by_role.deleted = list(failures)
-        return failures
+        deleted_users = self.members_by_role.deleted
+        success = True
+        for user in deleted_users:
+            try:
+                self.remove_member(user)
+            except TeamException:
+                success = False
+        if not success:
+            raise TeamException(
+                "Failed to remove all deleted users from team {}.".format(
+                    self.name
+                )
+            )
 
     def purge_reset(self):
         """Purge members whose accounts were reset.
 
-        Returns
-        -------
-        failures : list
-            A list of members that were unable to be purged. If all members
-            were purged successfully, this list will be empty.
+        This function is a wrapper for Team.remove_member, which automatically
+        targets members who have reset their accounts.
+
+        *Note: Even if a TeamException is raised, it's possible that some of
+        the reset users were successfully removed. The usernames listed in
+        Team.members_by_role.reset will contain those that were unable to be
+        purged.*
+
+        Raises
+        ------
+        TeamException
+            If some or all of the reset users could not be purged, a
+            TeamException will be raised.
 
         """
-        failures = list()
-        for username in self.members_by_role.reset:
-            if not self.remove_member(username):
-                failures.append(username)
-        self.members_by_role.reset = list(failures)
-        return failures
+        reset_users = self.members_by_role.reset
+        success = True
+        for user in reset_users:
+            try:
+                self.remove_member(user)
+            except TeamException:
+                success = False
+        if not success:
+            raise TeamException(
+                "Failed to remove all reset users from team {}.".format(
+                    self.name
+                )
+            )
 
     def remove_member(self, username):
-        """Attempt to remove the specified user from this team.
+        """Remove the specified user from this team.
 
         Parameters
         ----------
         username : str
             The username of the user to remove from the team.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        TeamException
+            If the user cannot be removed, a TeamException is raised.
 
         """
         query = {
             "method": "remove-member",
             "params": {"options": {"team": self.name, "username": username}},
         }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            return False
-        roles = {
-            "owner": self.members_by_role.owner,
-            "admin": self.members_by_role.admin,
-            "writer": self.members_by_role.writer,
-            "reader": self.members_by_role.reader,
-        }
-        for _, member_list in roles.items():
-            # Remove the user from their previous role.
-            if username in member_list:
-                member_list.pop(member_list.index(username))
-        return True
+        try:
+            self._api.call_api("team", query)
+            member_dict = self.members_by_role._asdict()
+            for member_set in member_dict.values():
+                if username in member_set:
+                    member_set.remove(username)
+        except APIException:
+            raise TeamException(
+                "Could not remove member {} from team {}.".format(
+                    username, self.name
+                )
+            )
 
     def rename(self, new_name):
-        """Attempt to rename this team.
+        """Rename this team.
 
-        This will only work if this team is a sub-team.
+        Note: This will only work if this team is a sub-team.
 
         Parameters
         ----------
         new_name : str
             The sub-team's new name.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Raises
+        ------
+        TeamException
+            If the team couldn't be renamed, a TeamException is raised.
 
         """
-        if "." not in self.name:
-            # We cannot change the name of top-level teams.
-            return False
-        new_name = ".".join(self.name.split(".")[:-1]) + "." + new_name
+        old_full_name = self.name
+        old_name = self.name.split(".")[-1]
+        new_full_name = old_full_name.replace(old_name, new_name)
         query = {
             "method": "rename-subteam",
             "params": {
-                "options": {"team": self.name, "new-team-name": new_name}
+                "options": {
+                    "team": old_full_name,
+                    "new-team-name": new_full_name,
+                }
             },
         }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            return False
-        self._keybase.update_team_name(self.name, new_name)
-        self.name = new_name
-        return True
+        try:
+            self._api.call_api("team", query)
+        except APIException:
+            raise TeamException(
+                "Could not rename sub-team {} to {}.".format(
+                    old_full_name, new_full_name
+                )
+            )
+        self._keybase._update_team_name(old_full_name, new_full_name)
 
     def sub_team(self, sub_team_name):
         """Return a Team instance referring to the specified sub-team.
@@ -358,77 +415,61 @@ class Team:
 
         Returns
         -------
-        `Team` or `False`
-            If successful, the script will return a `Team` instance referring
-            to the sub-team. Otherwise, the function will return `False`.
+        Team
+            If successful, the script will return a Team instance referring
+            to the sub-team.
 
         """
-        team_name = self.name + "." + sub_team_name
-        return self._keybase.team(team_name)
+        return self._keybase.team("{}.{}".format(self.name, sub_team_name))
 
     def update(self):
         """Update the team's membership and role information.
 
-        Returns
-        -------
-        bool
-            `True` or `False`, dependent on whether the function succeeded.
+        Changes in membership and role information that were not instigated by
+        PyKBLib will not automatically be reflected in the Team. This function
+        can be used to update this information.
+
+        Raises
+        ------
+        TeamException
+            If an error is received from the API when trying to retrieve the
+            team's membership information, the TeamException will be raised.
 
         """
         query = {
             "method": "list-team-memberships",
             "params": {"options": {"team": self.name}},
         }
-        response = _api_team(query)
-        if hasattr(response, "error"):
-            return False
-        # Retrieve the names of all members in each role.
+        response = self._api.call_api("team", query)
         members_by_role = dict()
-        self.reset = list()
         roles = {
             "owner": response.result.members.owners,
             "admin": response.result.members.admins,
             "writer": response.result.members.writers,
             "reader": response.result.members.readers,
         }
-        members_by_role["deleted"] = list()
-        members_by_role["reset"] = list()
+        members_by_role["deleted"] = set()
+        members_by_role["reset"] = set()
         for role, member_list in roles.items():
-            try:
-                members_by_role[role] = list()
+            members_by_role[role] = set()
+            if member_list is not None:
                 for member in member_list:
                     if member.username == self._keybase.username:
                         # This is our entry, save our role.
                         self.role = role
                     if member.status == 2:
                         # This member has deleted their account.
-                        members_by_role["deleted"].append(member.username)
+                        members_by_role["deleted"].add(member.username)
                     elif member.status == 1:
                         # This member's account was reset.
-                        members_by_role["reset"].append(member.username)
-                    elif member.status == 0:
-                        # This member is active.
-                        members_by_role[role].append(member.username)
+                        members_by_role["reset"].add(member.username)
                     else:
-                        # This member is of an unknown status.
-                        print(
-                            "Unknown member status for {}: {}".format(
-                                member.username, member.status
-                            )
-                        )
-                        members_by_role[role].append(member.username)
-            except TypeError:
-                # We've already initialized the list for this role, so we don't
-                # need to worry about handling this exception.
-                pass
+                        # This member is active.
+                        members_by_role[role].add(member.username)
         self.members_by_role = dict_to_ntuple(members_by_role)
-        return True
 
-    def update_parent_team_name(self, old_name, new_name):
+    def _update_parent_team_name(self, old_name, new_name):
         """Update this team's name after a parent team has changed its name.
-
-        Note: This is automatically called when the parent team's name is
-        changed. This should not be called directly.
 
         Parameters
         ----------

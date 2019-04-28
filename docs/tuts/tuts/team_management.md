@@ -37,7 +37,7 @@ To create a new Keybase team, simply use the `Keybase.create_team` function:
 TEAM = KB.create_team("team_name")
 ```
 
-The `Keybase.create_team` function returns either a new `Team` instance, or `False` if a new team could not be created. Once a new team is created, its name is added to the `Keybase.teams` list.
+The `Keybase.create_team` function will return a new `Team` instance, or will raise a `KeybaseException` if the team instance could not be created. Once a new team is created, its name is added to the `Keybase.teams` list.
 
 Keep in mind, team names can only be up to 16 characters long.
 
@@ -49,7 +49,7 @@ To create sub-teams, use the `Team.create_sub_team` function:
 team_name.sub_team_name
 ```
 
-The name of the resulting sub-team will be `parent_team_name.sub_team_name`.
+The name of the resulting sub-team will be `parent_team_name.sub_team_name`. If the sub-team could not be created, a `TeamException` is raised. *Note: PyKBLib does not automatically add the active user to the new sub-team.*
 
 Renaming Sub-Teams
 ------------------
@@ -61,7 +61,7 @@ If you wish to re-name a sub-team, you can use the `Team.rename` function:
 team_name.new_name
 ```
 
-While parent teams cannot be renamed, sub-teams can be renamed as often as you'd like.
+While root-level teams cannot be renamed, sub-teams can be renamed as often as you'd like.
 
 Deleting Teams
 --------------
@@ -80,21 +80,23 @@ TEAM.delete()
 
 If you attempt to delete a team that has sub-teams, the sub-teams will be deleted first.
 
+If the teams cannot be deleted, a `KeybaseException` will be raised. *Note: This doesn't necessarily mean that the function failed entirely, however. If working with a nested team structure, it's possible that some of the sub-teams were deleted prior to the function failing.*
+
 Accessing Team Information
 --------------------------
 Most information about a team is accessible through the `Team` class' attributes:
 
 * `Team.name` (*str*) The name of the team.
 * `Team.role` (*str*) The team role assigned to the current user.
-* `Team.members_by_role` (*namedtuple*) A namedtuple containing lists of members sorted into their respective roles:
-    * `Team.members_by_role.owner` (*list*) A list of all the owners of the team.
-    * `Team.members_by_role.admin` (*list*) A list of all the admins of the team.
-    * `Team.members_by_role.writer` (*list*) A list of all the writers in the team.
-    * `Team.members_by_role.reader` (*list*) A list of all the readers in the team.
-    * `Team.members_by_role.deleted` (*list*) A list of members who have deleted their accounts.
-    * `Team.members_by_role.reset` (*list*) A list of members who have reset their accounts.
+* `Team.members_by_role` (*namedtuple*) A namedtuple containing sets of members sorted into their respective roles:
+    * `Team.members_by_role.owner` (*set*) A set of all the owners of the team.
+    * `Team.members_by_role.admin` (*set*) A set of all the admins of the team.
+    * `Team.members_by_role.writer` (*set*) A set of all the writers in the team.
+    * `Team.members_by_role.reader` (*set*) A set of all the readers in the team.
+    * `Team.members_by_role.deleted` (*set*) A set of members who have deleted their accounts.
+    * `Team.members_by_role.reset` (*set*) A set of members who have reset their accounts.
 
-You can also get a complete list of active members using the `Team.members` function.
+You can also get a complete set of active members using the `Team.members` function.
 
 If you wanted to print out a summary of this information, you could do the following:
 
@@ -104,14 +106,7 @@ print(f"- role: {TEAM.role}")
 print("- team members:")
 for member in TEAM.members():
     print(f"  - {member}")
-roles = {
-    "owners": TEAM.members_by_role.owner,
-    "admins": TEAM.members_by_role.admin,
-    "writers": TEAM.members_by_role.writer,
-    "readers": TEAM.members_by_role.reader,
-    "deleted accounts": TEAM.members_by_role.deleted,
-    "reset accounts": TEAM.members_by_role.reset,
-}
+roles = TEAM.members_by_role._asdict()
 for role, member_list in roles.items():
     print(f"- {role}")
     for member in member_list:

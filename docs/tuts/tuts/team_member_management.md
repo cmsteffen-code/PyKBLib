@@ -5,30 +5,25 @@ Listing Requests to Join a Team
 -------------------------------
 When a user requests access to your team, if the team is set as "open," their request will automatically be approved. However, if the team is not open, then you'll need to be able to determine which users have requested access to which teams. To do this, you can use either the `Keybase.list_requests` function or the `Team.list_requests` function.
 
-The `Keybase.list_requests` function allows you to specify an optional team name. If you don't specify the team name, the function will return tuples for each of the teams with requests:
+The `Keybase.list_requests` function allows you to specify an optional team name. If you don't specify the team name, the function will return a `defaultdict` containing sets of the usernames requesting access to each team:
 
 ```
 >>> KB.list_requests()
-[('pykblib_dev_team.testing', 'demo_user'), ('pykblib_dev_team', 'demo_user')]
+defaultdict(<class 'set'>, {'pykblib_dev_team.testing': {'demo_user'}, 'pykblib_dev_team': {'demo_user', 'second_user'}})
 ```
 
-The tuples returned are in the format `(team_name, username)`.
+The dictionary returned is in the format `{team_name: {set of usernames}}`.
 
-If you instead choose to specify the name of the team, the `Keybase.list_requests` function will return a list of members who have requested access:
-
-```
->>> KB.list_requests("pykblib_dev_team")
-['demo_user']
-```
+If you choose to specify the name of the team, the `Keybase.list_requests` function will return a dictionary containing only the requests for the specified team.
 
 If you've already created an instance of a team and you wish to list the requests for that team, you can also use the `Team.list_requests` function:
 
 ```
 >>> TEAM.list_requests()
-['demo_user']
+{'demo_user', 'second_user'}
 ```
 
-The `Team.list_requests` function will return only the usernames of members who have requested access to that specific team.
+The `Team.list_requests` function will return a set containing only the usernames of members who have requested access to that specific team.
 
 Ignoring Requests to Join a Team
 --------------------------------
@@ -45,6 +40,8 @@ TEAM.ignore_request("demo_user")
 ```
 
 This will ignore the specified user's request, and will prevent that user from making additional requests.
+
+Should the function fail to ignore the request, a `KeybaseException` will be raised.
 
 Adding and Removing Members
 ---------------------------
@@ -82,22 +79,9 @@ The role assigned must be one of the following:
 
 (For more information regarding roles, see [the official Keybase team documentation](https://keybase.io/docs/teams/design). *Note: While each of these roles may have the specified abilities, many of these abilities have not yet been implemented in PyKBLib.*)
 
-If the `Team.add_member` or `Team.add_members` functions succeed, they will return `True`. Otherwise, they will return `False`. However, there is a caveat: When using `Team.add_members`, the Keybase API will attempt to add each member in the list in the order they are presented, and will return an error if any of the users are already in the team (resulting in the function returning `False`). However, due to the fact that it adds each member in order, it is possible that some of the members may be successfully added prior to the member that caused the failure. For example:
+If any of the add- or remove-member functions should fail, a `TeamException` will be raised. However, there is a caveat: When using `Team.add_members`, the Keybase API will attempt to add each member in the list in the order they are presented, and will return an error if any of the users are already in the team (resulting in the function raising an exception). However, due to the fact that it adds each member in order, it is possible that some of the members may be successfully added prior to the member that caused the failure.
 
-```
->>> # Current members: None
->>> TEAM.add_member("user1")  #1
-True
->>> # Current members: user1
->>> TEAM.add_members(["user1", "user2"])  #2
-False
->>> # Current members: user1 (user2 wasn't added)
->>> TEAM.add_members(["user2", "user1", "user3"])  #3
-False
->>> # Current members: user1, user2 (user3 wasn't added)
-```
-
-In the first example (#1), user1 was added to the team successfully. In the second example (#2), user2 could not be added because the API threw an error when trying to add user1, who was already a member of the team. In the third example (#3) user2 was added successfully, but user3 was not added, because the API threw an error when trying to add user1 to the team.
+If an exception is raised, you can use the `Team.update` function to retrieve the latest membership and role information for the team.
 
 Changing Member Roles
 ---------------------
@@ -108,11 +92,13 @@ To change a member's role, the active user must have either the `admin` or `owne
 TEAM.change_member_role("pykblib", "reader")
 ```
 
-The function will return `True` if the role is successfully changed, or `False` if the role change is a failure. *Note: Only team owners can add new team owners.*
+Should the function fail, a `TeamException` will be raised.
+
+*Note: Only team owners can add new team owners.*
 
 Purging Deleted and Reset Members
 ---------------------------------
-If a team member deletes or resets their account without leaving a team, their username will be added to the `Team.deleted` or `Team.reset` lists, respectively. The `Team.purge_deleted` and `Team.purge_reset` functions were created in order to purge these users quickly. Usage is simple:
+If a team member deletes or resets their account without leaving a team, their username will be added to the `Team.deleted` or `Team.reset` sets, respectively. (This change will be reflected the next time you run the `Team.update` function.) The `Team.purge_deleted` and `Team.purge_reset` functions were created in order to purge these users quickly. Usage is simple:
 
 ```
 # Purge all deleted users from a team.
@@ -121,6 +107,6 @@ TEAM.purge_deleted()
 TEAM.purge_reset()
 ```
 
-The functions will return a list of usernames that were unable to be purged, if any. If all deleted/reset users were successfully purged, the functions will return an empty list. Either way, the team's `purged` and `deleted` lists will be updated appropriately.
+Should one of the functions fail to purge all the necessary accounts, it will raise a `TeamException` However, it's still possible that some of the users were purged, even though an exception was raised. The exception simply means that the function failed to purge _all_ of the specified users. Fortunately, the `Team.members_by_role` attribute will be updated to reflect the remaining users in the deleted/reseet sets, regardless of whether an exception was raised or not.
 
-*Note: The `Team.purge_deleted` function removes all of the users in the current `Team.deleted` list, but it does not automatically update this list.*
+*Note: These functions remove all of the users known to be reset or deleted as of the last time `Team.update` was run. If a user reset or deleted their account since the last update was run, another update will be required for those changes to be detected.*
