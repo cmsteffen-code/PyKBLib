@@ -28,6 +28,10 @@ class APIException(KBLibException):
     """Raised when there's an error with the Keybase API."""
 
 
+class ChatException(KBLibException):
+    """Raised when there's an error with a TeamChat or DirectMessage."""
+
+
 class KeybaseException(KBLibException):
     """Raised when there's an error with the Keybase class."""
 
