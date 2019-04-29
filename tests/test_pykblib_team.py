@@ -265,12 +265,13 @@ class TeamTest(TestCase):
             }
         )
         expected_response = {
-            active: {"unread": active_unread, "status": "active"},
-            left: {"unread": left_unread, "status": "left"},
-            never_joined: {
-                "unread": never_joined_unread,
-                "status": "never_joined",
-            },
+            active: dict_to_ntuple(
+                {"unread": active_unread, "status": "active"}
+            ),
+            left: dict_to_ntuple({"unread": left_unread, "status": "left"}),
+            never_joined: dict_to_ntuple(
+                {"unread": never_joined_unread, "status": "never_joined"}
+            ),
         }
         response = self.team.channels()
         self.assertEqual(response, expected_response)

@@ -161,6 +161,59 @@ class Team:
             elif username in member_dict[key]:
                 member_dict[key].remove(username)
 
+    def channels(self):
+        """Retrieve a list of the channels available in this team.
+
+        This function returns a dictionary of channels, with some useful extra
+        information. The keys are the channel names, and the values are
+        namedtuples containing the channel status and whether there are any
+        unread messages. The format is as follows:
+
+            return_value = {
+                "channel_name": ntuple(status='active', unread=True),
+            }
+
+        The values can be accessed via `return_value[channel_name].status` and
+        `return_value[channel_name].unread`. The status can be one of three
+        possible options: `"active"`, `"left"`, or `"never_joined"`. The unread
+        value is a boolean, either `True` or `False`.
+
+        Returns
+        -------
+        return_value : dict
+            A dictionary containing the channel names, channel status, and
+            whether there are unread messages in the channel.
+
+        Raises
+        ------
+        TeamException
+            If the channel information cannot be retrieved, a TeamException
+            will be raised.
+
+        """
+        query = {
+            "method": "listconvsonname",
+            "params": {
+                "options": {
+                    "topic_type": "CHAT",
+                    "members_type": "team",
+                    "name": self.name,
+                }
+            },
+        }
+        try:
+            response = self._api.call_api("chat", query)
+            return_value = dict()
+            for channel in response.result.conversations:
+                return_value[channel.channel.topic_name] = dict_to_ntuple(
+                    {"status": channel.member_status, "unread": channel.unread}
+                )
+            return return_value
+        except APIException:
+            raise TeamException(
+                "Can't retrieve channels for team {}.".format(self.name)
+            )
+
     def create_sub_team(self, sub_team_name):
         """Create a sub-team within this team.
 
