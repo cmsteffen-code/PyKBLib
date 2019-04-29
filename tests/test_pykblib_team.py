@@ -210,6 +210,71 @@ class TeamTest(TestCase):
         with self.assertRaises(TeamException):
             self.team.change_member_role(username, new_role)
 
+    def test_team_channels(self):
+        self.team.name = random_username()
+
+        # Test failure.
+        self.team._api.call_api.side_effect = APIException("EXCEPTION")
+        with self.assertRaises(TeamException):
+            self.team.channels()
+        self.team._api.call_api.side_effect = None
+        self.team._api.call_api.assert_called_with(
+            "chat",
+            {
+                "method": "listconvsonname",
+                "params": {
+                    "options": {
+                        "topic_type": "CHAT",
+                        "members_type": "team",
+                        "name": self.team.name,
+                    }
+                },
+            },
+        )
+
+        # Test success.
+        active = random_username()
+        active_unread = random.choice([True, False])
+        left = random_username()
+        left_unread = random.choice([True, False])
+        never_joined = random_username()
+        never_joined_unread = random.choice([True, False])
+        self.team._api.call_api.return_value = dict_to_ntuple(
+            {
+                # This is a slimmed-down response, but contains all the
+                # information that is necessary for this function to function.
+                "result": {
+                    "conversations": [
+                        {
+                            "channel": {"topic_name": active},
+                            "unread": active_unread,
+                            "member_status": "active",
+                        },
+                        {
+                            "channel": {"topic_name": left},
+                            "unread": left_unread,
+                            "member_status": "left",
+                        },
+                        {
+                            "channel": {"topic_name": never_joined},
+                            "unread": never_joined_unread,
+                            "member_status": "never_joined",
+                        },
+                    ]
+                }
+            }
+        )
+        expected_response = {
+            active: {"unread": active_unread, "status": "active"},
+            left: {"unread": left_unread, "status": "left"},
+            never_joined: {
+                "unread": never_joined_unread,
+                "status": "never_joined",
+            },
+        }
+        response = self.team.channels()
+        self.assertEqual(response, expected_response)
+
     def test_team_create_sub_team(self):
         # First, let's test a couple failures.
         self.team._keybase.create_team.side_effect = KeybaseException(
