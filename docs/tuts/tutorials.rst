@@ -10,3 +10,5 @@ This section will detail how to use PyKBLib to interface with the Keybase comman
    tuts/user_information
    tuts/team_management
    tuts/team_member_management
+   tuts/personal_communication
+   tuts/team_communication
