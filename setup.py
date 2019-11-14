@@ -42,6 +42,7 @@ setup(
     ],
     packages=[PACKAGE_NAME],
     include_package_data=True,
-    install_requires=["steffentools >=0.1.0"],
+    install_requires=["steffentools >=0.1.0",
+                      "pexpect>=4.6.0"],
     entry_points={},
 )
